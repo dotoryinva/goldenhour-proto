@@ -403,7 +403,7 @@
   <div><kbd>S</kbd> / <kbd>↓</kbd> brake / reverse</div>
   <div><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> steer</div>
   <div><kbd>SPACE</kbd> handbrake</div>
-  <div><kbd>C</kbd> change camera</div>
+  <div><kbd>C</kbd> camera (chase / driver / cinematic / race)</div>
   <div><kbd>R</kbd> reset</div>
 </div>
 
@@ -1137,11 +1137,13 @@ function buildChunkMeshes(startIdx, endIdx) {
     if (i % 2 === 0) {
       for (const side of [-1, 1]) {
         if (Math.random() > 0.40) continue;
-        const off = ROAD_HALF + 3 + Math.random() * 4;
+        // Pull objects further from road edge to prevent overlaps on tight curves
+        const off = ROAD_HALF + 5 + Math.random() * 4;
         const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 2;
         const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 2;
-        const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 5);
-        if (d2 < (ROAD_HALF + 2) * (ROAD_HALF + 2)) continue;
+        // Search wider, reject within 5m of any road point centerline
+        const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 12);
+        if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
         const roll = Math.random();
         let obj;
         if (roll < 0.45)      obj = makeCactus();
@@ -1158,11 +1160,11 @@ function buildChunkMeshes(startIdx, endIdx) {
     if (i % 4 === 0) {
       for (const side of [-1, 1]) {
         if (Math.random() > 0.55) continue;
-        const off = ROAD_HALF + 10 + Math.random() * 20;
+        const off = ROAD_HALF + 12 + Math.random() * 18;
         const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 6;
         const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 6;
-        const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 8);
-        if (d2 < (ROAD_HALF + 2) * (ROAD_HALF + 2)) continue;
+        const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 14);
+        if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
         const roll = Math.random();
         let obj;
         if (roll < 0.45)      obj = makeRock();
@@ -1350,6 +1352,7 @@ function buildCar() {
   );
   body.position.y = 0.55; body.castShadow = true;
   body.userData.role = 'body';
+  body.userData.external = true;
   g.add(body);
 
   const cabin = new THREE.Mesh(
@@ -1357,6 +1360,7 @@ function buildCar() {
     new THREE.MeshPhongMaterial({ color: 0x1a1a22, shininess: 110, specular: 0x444466 })
   );
   cabin.position.set(0, 1.1, -0.2); cabin.castShadow = true;
+  cabin.userData.external = true;
   g.add(cabin);
 
   const hood = new THREE.Mesh(
@@ -1365,12 +1369,14 @@ function buildCar() {
   );
   hood.position.set(0, 0.87, 1.0);
   hood.userData.role = 'accent';
+  hood.userData.external = true;
   g.add(hood);
 
   const hlMat = new THREE.MeshBasicMaterial({ color: 0xfff4d0 });
   [-0.65, 0.65].forEach(x => {
     const hl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.12), hlMat);
     hl.position.set(x, 0.7, 2.1);
+    hl.userData.external = true;
     g.add(hl);
   });
 
@@ -1378,6 +1384,7 @@ function buildCar() {
   [-0.7, 0.7].forEach(x => {
     const tl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.08), tlMat);
     tl.position.set(x, 0.7, -2.1);
+    tl.userData.external = true;
     g.add(tl);
   });
 
@@ -1390,8 +1397,9 @@ function buildCar() {
       pivot.position.set(x, 0.42, z);
       const w = new THREE.Mesh(wheelGeo, wheelMat);
       w.rotation.z = Math.PI / 2; w.castShadow = true;
+      w.userData.external = true;
       pivot.add(w);
-      pivot.userData = { wheel: w, isFront };
+      pivot.userData = { wheel: w, isFront: isFront, external: true };
       g.add(pivot);
       wheels.push(pivot);
     });
@@ -1402,6 +1410,99 @@ function buildCar() {
 const car = buildCar();
 scene.add(car);
 
+// === COCKPIT INTERIOR ===
+// Built as a child of `car` so it moves and rotates with the vehicle.
+// Visible only in DRIVER POV; hidden in all other camera modes.
+// Positioned for a camera at y=0.92 (lower seated position), so all
+// cockpit elements sit clearly below the eye line.
+const cockpit = new THREE.Group();
+cockpit.visible = false;
+car.add(cockpit);
+
+// Dashboard top — sits comfortably below eye level
+const dashMat = new THREE.MeshPhongMaterial({ color: 0x121418, shininess: 25 });
+const dashTop = new THREE.Mesh(
+  new THREE.BoxGeometry(1.5, 0.08, 0.50),
+  dashMat
+);
+dashTop.position.set(0, 0.72, 0.55);
+cockpit.add(dashTop);
+
+// Dashboard front fascia
+const dashFront = new THREE.Mesh(
+  new THREE.BoxGeometry(1.5, 0.42, 0.06),
+  dashMat
+);
+dashFront.position.set(0, 0.49, 0.80);
+cockpit.add(dashFront);
+
+// Instrument cluster
+const clusterMat = new THREE.MeshBasicMaterial({ color: 0x1a1c22 });
+const cluster = new THREE.Mesh(
+  new THREE.BoxGeometry(0.50, 0.14, 0.02),
+  clusterMat
+);
+cluster.position.set(0, 0.74, 0.79);
+cockpit.add(cluster);
+const dialMat = new THREE.MeshBasicMaterial({ color: 0xffb070 });
+for (const dx of [-0.13, 0.13]) {
+  const dial = new THREE.Mesh(new THREE.CircleGeometry(0.052, 16), dialMat);
+  dial.position.set(dx, 0.74, 0.79 + 0.012);
+  cockpit.add(dial);
+}
+
+// A-pillars
+const pillarMat = new THREE.MeshPhongMaterial({ color: 0x0a0b0d, shininess: 15 });
+function makePillar(side) {
+  const p = new THREE.Mesh(
+    new THREE.BoxGeometry(0.10, 1.0, 0.10),
+    pillarMat
+  );
+  p.position.set(0.78 * side, 1.15, 0.55);
+  p.rotation.z = -0.18 * side;
+  p.rotation.x = -0.35;
+  return p;
+}
+cockpit.add(makePillar(-1), makePillar(1));
+
+// Inside roof — above eye level
+const roof = new THREE.Mesh(
+  new THREE.BoxGeometry(1.55, 0.04, 1.4),
+  new THREE.MeshPhongMaterial({ color: 0x18181c })
+);
+roof.position.set(0, 1.48, -0.05);
+cockpit.add(roof);
+
+// Steering wheel
+const swMat = new THREE.MeshPhongMaterial({ color: 0x0c0d10, shininess: 80, specular: 0x404040 });
+const steeringWheelTilt = new THREE.Group();
+const steeringWheel = new THREE.Group();
+steeringWheelTilt.add(steeringWheel);
+const wheelRim = new THREE.Mesh(
+  new THREE.TorusGeometry(0.20, 0.024, 8, 24),
+  swMat
+);
+steeringWheel.add(wheelRim);
+for (const a of [0, Math.PI / 2 + 0.4, Math.PI / 2 - 0.4]) {
+  const sp = new THREE.Mesh(
+    new THREE.BoxGeometry(0.17, 0.02, 0.018),
+    swMat
+  );
+  sp.rotation.z = a;
+  steeringWheel.add(sp);
+}
+const hub = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.045, 0.045, 0.03, 12),
+  new THREE.MeshPhongMaterial({ color: 0xffb070 })
+);
+hub.rotation.x = Math.PI / 2;
+steeringWheel.add(hub);
+// Tilt wheel face toward driver
+steeringWheelTilt.rotation.x = -1.20;
+// Position: lower-center of the cockpit, in front of the camera
+steeringWheelTilt.position.set(0, 0.58, 0.60);
+cockpit.add(steeringWheelTilt);
+
 // Update the car's body color from a car config
 function recolorCar(carConfig) {
   if (!car) return;
@@ -1410,7 +1511,6 @@ function recolorCar(carConfig) {
     if (child.userData.role === 'body') {
       child.material.color.setHex(carConfig.color);
     } else if (child.userData.role === 'accent') {
-      // Mix: 70% body color + 30% accent, for the hood stripe
       const bodyC = new THREE.Color(carConfig.color);
       const accentC = new THREE.Color(carConfig.accentColor || carConfig.color);
       const mixed = bodyC.clone().lerp(accentC, 0.6);
@@ -1431,8 +1531,10 @@ const carState = {
   steerInput: 0,
   gear: 1,
   rpm: 900,
-  shiftTimer: 0,        // counts down during a shift; throttle cut while > 0
-  shiftDirection: 0,    // +1 up, -1 down, 0 idle — used for visual cue
+  shiftTimer: 0,
+  shiftDirection: 0,
+  driftCommit: 0,    // 0 = no drift, >0 = currently committed
+  driftSign: 0,      // locked slide direction during drift; 0 between drifts
 };
 
 // ====================================================================
@@ -1451,7 +1553,7 @@ const CARS = [
     accel: 9.5,
     maxForward: 86,
     gripNormal: 6.4,
-    gripHandbrake: 0.95,
+    gripHandbrake: 0.45,
     gearRatios: [3.9, 2.8, 2.1, 1.65, 1.30, 1.05, 0.85],
     finalDrive: 3.6,
     rpmIdle: 1000,
@@ -1470,7 +1572,7 @@ const CARS = [
     accel: 8.6,
     maxForward: 82,
     gripNormal: 6.0,
-    gripHandbrake: 0.9,
+    gripHandbrake: 0.42,
     gearRatios: [4.0, 2.9, 2.2, 1.70, 1.35, 1.10, 0.90, 0.74],
     finalDrive: 3.5,
     rpmIdle: 900,
@@ -1489,7 +1591,7 @@ const CARS = [
     accel: 10.4,
     maxForward: 92,
     gripNormal: 5.8,
-    gripHandbrake: 0.85,
+    gripHandbrake: 0.38,
     gearRatios: [4.1, 2.95, 2.25, 1.75, 1.40, 1.12, 0.92],
     finalDrive: 3.7,
     rpmIdle: 1100,
@@ -1508,7 +1610,7 @@ const CARS = [
     accel: 9.8,
     maxForward: 88,
     gripNormal: 5.4,         // floatier — more drift-prone
-    gripHandbrake: 0.75,
+    gripHandbrake: 0.32,
     gearRatios: [3.8, 2.7, 2.05, 1.60, 1.28, 1.05, 0.86],
     finalDrive: 3.8,
     rpmIdle: 900,
@@ -1527,7 +1629,7 @@ const CARS = [
     accel: 11.6,             // brutal
     maxForward: 100,         // ~360 km/h
     gripNormal: 5.6,         // twitchy
-    gripHandbrake: 0.9,
+    gripHandbrake: 0.42,
     gearRatios: [4.2, 3.1, 2.4, 1.9, 1.50, 1.18, 0.95, 0.78],
     finalDrive: 3.7,
     rpmIdle: 1000,
@@ -1642,6 +1744,8 @@ function resetCar() {
   carState.rpm = RPM_IDLE;
   carState.shiftTimer = 0;
   carState.shiftDirection = 0;
+  carState.driftCommit = 0;
+  carState.driftSign = 0;
   carRoadIdx = 0;
 }
 
@@ -1703,21 +1807,99 @@ function updatePhysics(dt) {
   fwdVel = Math.max(MAX_REVERSE, Math.min(MAX_FORWARD, fwdVel));
 
   // ------------------------------------------------------------------
-  // SPEED-DEPENDENT GRIP — real cars can't corner at 200 km/h on tight roads.
-  // Cornering force scales as v²/r, so the effective grip envelope falls
-  // off with speed. Trying to corner too fast → natural understeer/slide.
+  // DRIFT MODE — Asphalt-style. The car commits to a beautiful slip
+  // angle the moment the player commits (handbrake at speed). Counter-
+  // steering exits the drift naturally. Player just holds space + steer,
+  // the angle takes care of itself.
   // ------------------------------------------------------------------
-  // At low speed (≤22 m/s, ~80 km/h): full grip.
-  // From there it falls off so by 50 m/s (~180 km/h) grip is ~55%.
   const speedNow = Math.hypot(fwdVel, latVel);
   const gripFalloff = THREE.MathUtils.clamp(1.0 - Math.max(0, speedNow - 22) * 0.018, 0.45, 1.0);
-  const grip = (handbrake ? GRIP_HANDBRAKE : GRIP_NORMAL) * gripFalloff;
-  latVel *= Math.exp(-grip * dt);
 
-  // Drift detection (preliminary — used for snap assist)
+  // 1. Decide if we're in drift mode
+  const handbrakeAtSpeed = handbrake && speedNow > 6;
+  if (handbrakeAtSpeed) {
+    // Drift is starting OR continuing. If this is the FIRST frame of a new drift,
+    // give the rear an initial sideways kick so the slide is immediately visible
+    // instead of slowly accumulating from grip loss alone.
+    if (carState.driftCommit <= 0 && carState.driftSign === 0) {
+      // Pick kick direction: prefer steering input direction; fallback to current latVel
+      const kickDir = Math.sign(steerIn) || Math.sign(latVel) || 1;
+      // Kick strength scales with current speed (faster = more dramatic break-loose)
+      const kickStrength = Math.min(8, Math.max(3, fwdVel * 0.18));
+      latVel += kickDir * kickStrength;
+    }
+    carState.driftCommit = 0.55;
+  } else {
+    carState.driftCommit = Math.max(0, (carState.driftCommit || 0) - dt);
+  }
+  const inDriftMode = carState.driftCommit > 0 && speedNow > 5;
+
+  // 2. Apply grip — different behavior in/out of drift mode
+  if (inDriftMode) {
+    // === DRIFT MODE ===
+    // Approach: don't FORCE a target lateral velocity (that made the car
+    // slide like ice without visible body rotation). Instead:
+    //   1. Apply very low grip (handbrake grip) — rear breaks free
+    //   2. Let heading rotate naturally from steering input
+    //   3. As heading rotates, world velocity stays roughly constant
+    //      but the LATERAL component grows naturally → visible slip
+    //   4. Cap the slip angle at ~32° so it doesn't spin out
+    //
+    // This produces the classic "tail kicks out, body rotates, beautiful
+    // sustained slide" feel of a real drift.
+
+    // Apply handbrake-grade grip (very loose) — let latVel decay slowly
+    const handbrakeGrip = GRIP_HANDBRAKE * gripFalloff;
+    latVel *= Math.exp(-handbrakeGrip * dt);
+
+    // Lock the slide direction at drift start (prevents teleport on
+    // counter-steer when latVel crosses zero)
+    if (carState.driftSign === 0 || !carState.driftSign) {
+      const initialSign = Math.sign(latVel) || Math.sign(steerIn) || 1;
+      carState.driftSign = initialSign;
+    }
+
+    // Compute current slip angle (between forward and velocity vector)
+    const currentSlip = Math.atan2(Math.abs(latVel), Math.max(0.1, Math.abs(fwdVel)));
+    const TARGET_SLIP_ANGLE = 0.56; // ~32°
+
+    // COUNTER-STEER EXIT: steering opposite to slide direction ramps
+    // the cap down toward 0, naturally ending the drift.
+    const slideSign = carState.driftSign;
+    const counterSteer = steerIn * slideSign < 0
+      ? Math.min(1, Math.abs(steerIn) * 1.4) : 0;
+    const effectiveCap = TARGET_SLIP_ANGLE * (1 - counterSteer * 0.95);
+
+    // CAP: only intervene if slip exceeds the cap. If under the cap, let
+    // it grow naturally. This is the difference between "drift" and
+    // "spin out."
+    if (currentSlip > effectiveCap) {
+      const cappedLat = slideSign * Math.tan(effectiveCap) * Math.abs(fwdVel);
+      // Smoothly drag toward the cap (not snap — preserves feel)
+      const k = 6.5;
+      latVel += (cappedLat - latVel) * (1 - Math.exp(-k * dt));
+    }
+
+    // Small forward bleed (real drifts lose some energy to slip)
+    fwdVel *= Math.exp(-0.25 * dt);
+
+  } else {
+    // === NORMAL DRIVING ===
+    if (carState.driftSign) {
+      // Smooth transition out of drift
+      const easedGrip = GRIP_NORMAL * gripFalloff * 0.5;
+      latVel *= Math.exp(-easedGrip * dt);
+      carState.driftSign = 0;
+    } else {
+      const grip = GRIP_NORMAL * gripFalloff;
+      latVel *= Math.exp(-grip * dt);
+    }
+  }
+
+  // Drift detection for HUD/audio/effects
   const preDriftAngle = Math.atan2(Math.abs(latVel), Math.max(1, Math.abs(fwdVel)));
   const preSpeed = Math.hypot(fwdVel, latVel);
-  const isDrifting = preDriftAngle > 0.35 && preSpeed > 8;
+  const isDrifting = inDriftMode || (preDriftAngle > 0.35 && preSpeed > 8);
 
   // ------------------------------------------------------------------
   // ROAD-SNAP ASSIST — Asphalt-style, safe edition.
@@ -1773,39 +1955,63 @@ function updatePhysics(dt) {
           }
           const safeTanHeading = assistTangentSmoothed;
 
-          // -- HEADING ROTATION (gentle) --
+          // -- HEADING ROTATION --
+          // Normal driving: gentle pull toward road tangent (helps cars track straights).
+          // Drift: stronger pull toward road tangent, but ONLY when the player's
+          //   steering direction matches the road's curve. If the player steers
+          //   away (different line) or counter-steers (exiting), the assist
+          //   disengages and the player has full control of heading.
           const dH = angleDelta(safeTanHeading, carState.heading);
-          // Only rotate heading if we're within ±60° of the target — don't try
-          // to spin the car 180° if something is weird
           if (Math.abs(dH) < Math.PI * 0.6) {
-            const headingK = 2.4 * onRoadFactor;
-            carState.heading += dH * (1 - Math.exp(-headingK * dt));
+            let headingK = 0;
+            if (inDriftMode) {
+              // Compute road's curve direction by sampling the tangent ahead
+              const ahead = Math.min(nextChunkIdx - 1, near.idx + 8);
+              const tahead = tanPerpAt(ahead);
+              if (tahead.t) {
+                const tanAheadAngle = Math.atan2(tahead.t.x, tahead.t.z);
+                // Positive = road curving left (heading +), negative = right
+                const roadCurveDir = Math.sign(angleDelta(tanAheadAngle, safeTanHeading));
+                // Player's steering direction: + steerIn = left, - = right (positive steerIn rotates heading +)
+                const playerSteerDir = Math.sign(steerIn);
+                // If steering matches corner direction (and is non-trivial), assist
+                const commitment = (roadCurveDir !== 0 && playerSteerDir === roadCurveDir)
+                  ? Math.min(1, Math.abs(steerIn) * 1.2)
+                  : 0;
+                headingK = commitment * 4.5 * onRoadFactor;
+              }
+            } else {
+              headingK = 2.4 * onRoadFactor;
+            }
+            if (headingK > 0) {
+              carState.heading += dH * (1 - Math.exp(-headingK * dt));
+            }
           }
 
-          // -- LATERAL VELOCITY DAMPING (safe) --
-          // Decompose world velocity into (along road tangent, perp to road).
-          // Damp the perpendicular component. This can never amplify or flip
-          // velocity — it only ever reduces sideways motion.
+          // -- LATERAL VELOCITY DAMPING (safety) --
+          // Still applies during drift, but only as a safety against
+          // flying off the road completely. Damps the perpendicular
+          // velocity ONLY when it points away from centerline. Can never
+          // amplify velocity or push the car toward the centerline against
+          // the player's intent.
           const vWorldX = _forward.x * fwdVel + _right.x * latVel;
           const vWorldZ = _forward.z * fwdVel + _right.z * latVel;
           const tx = Math.sin(safeTanHeading), tz = Math.cos(safeTanHeading);
-          const px = -tz, pz = tx; // perpendicular to tangent
+          const px = -tz, pz = tx;
           const vAlongTan  = vWorldX * tx + vWorldZ * tz;
           const vPerpToRoad= vWorldX * px + vWorldZ * pz;
 
-          // Damp the perpendicular component, but only if it's pointing AWAY
-          // from the road centerline (i.e. dragging the car off). Don't damp
-          // if it's pointing toward the centerline (recovery is OK).
           const perpAwayFromCenter = (Math.sign(lateralOffset) === Math.sign(vPerpToRoad)) ? 1 : 0;
+          // Lighter damping during drift (so the car can still travel laterally
+          // for drift width); stronger when not drifting (helps recover).
+          const dampingK = inDriftMode ? 1.2 : 2.5;
           const dampedPerp = perpAwayFromCenter
-            ? vPerpToRoad * Math.exp(-2.5 * onRoadFactor * dt)
+            ? vPerpToRoad * Math.exp(-dampingK * onRoadFactor * dt)
             : vPerpToRoad;
 
-          // Reconstruct world velocity from (along, perp) in road frame
           const newVx = vAlongTan * tx + dampedPerp * px;
           const newVz = vAlongTan * tz + dampedPerp * pz;
 
-          // Convert back to car frame using current (post-heading-update) body axes
           setBodyAxes(carState.heading);
           fwdVel = newVx * _forward.x + newVz * _forward.z;
           latVel = newVx * _right.x   + newVz * _right.z;
@@ -1825,7 +2031,9 @@ function updatePhysics(dt) {
   const speedAbs = Math.abs(fwdVel) + Math.abs(latVel) * 0.4;
   const speedFactor = Math.max(STEER_FACTOR_MIN, Math.min(1.0, speedAbs / 12));
   const moveSign = fwdVel >= 0 ? 1 : -1;
-  carState.heading += steerIn * STEER_RATE * speedFactor * dt * moveSign;
+  // During drift, rear is loose — car pivots ~50% more responsively
+  const driftBonus = inDriftMode ? 1.55 : 1.0;
+  carState.heading += steerIn * STEER_RATE * speedFactor * driftBonus * dt * moveSign;
 
   const targetSteer = steerIn * 0.5;
   carState.steerAngle += (targetSteer - carState.steerAngle) * Math.min(1, dt * 9);
@@ -2252,36 +2460,130 @@ function updateSmoke(dt) {
 // ====================================================================
 //  CAMERA
 // ====================================================================
-const VIEW_MODES = ['CHASE', 'HOOD', 'CINEMATIC'];
+const VIEW_MODES = ['CHASE', 'HOOD', 'DRIVER', 'CINEMATIC', 'RACE_CAM'];
 let viewIndex = 0;
-function cycleView() { viewIndex = (viewIndex + 1) % VIEW_MODES.length; }
+function cycleView() {
+  viewIndex = (viewIndex + 1) % VIEW_MODES.length;
+  // Reset race cam state when switching INTO it so it picks a fresh angle
+  if (VIEW_MODES[viewIndex] === 'RACE_CAM') raceCamState.needsNewShot = true;
+}
 
 const _tmpPos  = new THREE.Vector3();
 const _tmpLook = new THREE.Vector3();
+
+// === RACE CAM STATE ===
+// TV-style cinematic: place a virtual camera alongside the road,
+// watch the car approach + pass, then cut to a new shot.
+const raceCamState = {
+  needsNewShot: true,
+  shotStartTime: 0,         // performance.now() in ms
+  camPos: new THREE.Vector3(),
+  camLookOffset: new THREE.Vector3(),  // small offset from car (so look point can lead/lag the car)
+  shotDirection: 1,         // which side of road the camera was placed (sign)
+  shotAheadDistance: 0,     // how far ahead of the car along the road the cam was placed
+  // Used to decide when to cut: how far has the car traveled past the cam point?
+  shotCamRoadIdx: 0,        // road index where the cam is placed
+};
+
+function pickNewRaceShot() {
+  const now = performance.now();
+  raceCamState.shotStartTime = now;
+  // Place the cam ahead of the car along the road, at varying distances for variety
+  const aheadOptions = [22, 35, 50, 70, 90];
+  const ahead = aheadOptions[Math.floor(Math.random() * aheadOptions.length)];
+  // Pick which side of the road (alternates with a bit of randomness)
+  const side = Math.random() < 0.5 ? 1 : -1;
+  // Side offset varies — from very close (3m) for low-angle dramatic shots
+  // to far back (18m) for wide cinematic shots
+  const sideOffOptions = [3, 5, 8, 12, 18];
+  const sideOff = sideOffOptions[Math.floor(Math.random() * sideOffOptions.length)];
+  // Height varies — low to ground level shots, or elevated bird's-eye
+  const heightOptions = [0.7, 1.4, 2.5, 4.5, 8];
+  const height = heightOptions[Math.floor(Math.random() * heightOptions.length)];
+
+  // Find the road point that far ahead
+  const targetIdx = Math.min(nextChunkIdx - 2, carRoadIdx + Math.round(ahead / POINT_STEP));
+  if (targetIdx < 0 || !ROAD_POINTS[targetIdx]) {
+    // Fallback: just position near the car
+    raceCamState.camPos.copy(carState.position).add(new THREE.Vector3(sideOff * side, height, 0));
+    raceCamState.shotCamRoadIdx = carRoadIdx;
+  } else {
+    const roadP = ROAD_POINTS[targetIdx];
+    const { p: perp } = tanPerpAt(targetIdx);
+    raceCamState.camPos.set(
+      roadP.x + perp.x * side * sideOff,
+      height,
+      roadP.z + perp.z * side * sideOff
+    );
+    raceCamState.shotCamRoadIdx = targetIdx;
+  }
+  raceCamState.shotDirection = side;
+  raceCamState.shotAheadDistance = ahead;
+  raceCamState.needsNewShot = false;
+}
+
+function computeRaceCam(phys) {
+  // Cut logic — timing depends on car speed:
+  //  - Always hold at least 3 seconds (prevents dizziness from rapid cuts)
+  //  - Trigger distance scales with speed (30m at low speed, ~55m at top)
+  //  - Max 9 seconds before forced cut (variety)
+  const now = performance.now();
+  const carPassedBy = carRoadIdx - raceCamState.shotCamRoadIdx;
+  const carPassedMeters = carPassedBy * POINT_STEP;
+  const heldSeconds = (now - raceCamState.shotStartTime) / 1000;
+  const speed = phys ? phys.speed : 30;
+  const triggerMeters = 30 + speed * 0.8;
+  const minHold = 3.0;
+  const maxHold = 9.0;
+  const shouldCut =
+    raceCamState.needsNewShot ||
+    (heldSeconds > minHold && carPassedMeters > triggerMeters) ||
+    heldSeconds > maxHold;
+  if (shouldCut) {
+    pickNewRaceShot();
+  }
+  _tmpPos.copy(raceCamState.camPos);
+  _tmpLook.set(carState.position.x, carState.position.y + 0.8, carState.position.z);
+  return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 38, fovSpeedAdd: 0 };
+}
 
 function computeViewCam(mode, phys) {
   setBodyAxes(carState.heading);
   const cp = carState.position;
   switch (mode) {
     case 'CHASE': {
-      // Distance/height interpolate with speed:
-      // At 0 km/h: 4.5m back, 2.8m up — chill cinematic
-      // At top speed: 2.6m back, 2.0m up — visceral closeup
-      // FOV stays constant so the car visibly GROWS as speed increases.
       const speedFrac = Math.min(1, phys ? phys.speed / MAX_FORWARD : 0);
-      const behind = 4.5 - speedFrac * 1.9;
-      const above  = 2.8 - speedFrac * 0.8;
+      // Distance pulled back so the car sits at ~80% on-screen size.
+      // Camera tracks closely at any speed via speed-scaled follow.
+      const behind = 5.8 - speedFrac * 1.8;   // 5.8m at rest → 4.0m at top
+      const above  = 2.6 - speedFrac * 0.6;   // 2.6m at rest → 2.0m at top — lower
       const lookAhead = 1.5 - speedFrac * 0.6;
       const lookUp   = 1.1 - speedFrac * 0.4;
       _tmpPos.set(cp.x - _forward.x * behind, cp.y + above, cp.z - _forward.z * behind);
       _tmpLook.set(cp.x + _forward.x * lookAhead, cp.y + lookUp, cp.z + _forward.z * lookAhead);
-      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 68, fovSpeedAdd: 0 };
+      // FOV widens at speed for stronger speed sensation. Car has been
+      // pulled back enough that this expansion doesn't shrink it past comfort.
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 66, fovSpeedAdd: 10 };
     }
     case 'HOOD': {
-      const front = 1.6, height = 0.95;
-      _tmpPos.set(cp.x + _forward.x * front, cp.y + height, cp.z + _forward.z * front);
-      _tmpLook.set(cp.x + _forward.x * 30, cp.y + 1.5, cp.z + _forward.z * 30);
-      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 75, fovSpeedAdd: 10 };
+      // Mounted just above the front of the car, looking down the road.
+      // No FOV speed change — keeps the view stable.
+      const ahead = 1.4;    // forward from car center, on top of hood
+      const height = 0.85;
+      _tmpPos.set(cp.x + _forward.x * ahead, cp.y + height, cp.z + _forward.z * ahead);
+      _tmpLook.set(cp.x + _forward.x * 40, cp.y + 1.0, cp.z + _forward.z * 40);
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 75, fovSpeedAdd: 0 };
+    }
+    case 'DRIVER': {
+      // Driver's POV — seated in the cabin. Camera at eye height, looking
+      // forward down the road with dashboard + steering wheel visible
+      // in the lower portion of view.
+      const back = -0.05;
+      const height = 0.95;
+      _tmpPos.set(cp.x - _forward.x * back, cp.y + height, cp.z - _forward.z * back);
+      // Look mostly forward, slight downward tilt — keeps road dominant
+      _tmpLook.set(cp.x + _forward.x * 30, cp.y + 1.05, cp.z + _forward.z * 30);
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 72, fovSpeedAdd: 0 };
     }
     case 'CINEMATIC': {
       const behind = 16, above = 2.6, sideOff = 5;
@@ -2293,6 +2595,9 @@ function computeViewCam(mode, phys) {
       _tmpLook.set(cp.x, cp.y + 0.9, cp.z);
       return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 50, fovSpeedAdd: 7 };
     }
+    case 'RACE_CAM': {
+      return computeRaceCam(phys);
+    }
   }
 }
 
@@ -2300,16 +2605,18 @@ let lockedDriftSide = 1;
 function computeDriftCam() {
   setBodyAxes(carState.heading);
   const cp = carState.position;
-  const sideOff = 4.5 * lockedDriftSide;
-  const back = 6.5;
-  const height = 1.55;
+  // Closer than before — more visceral, exaggerates speed perception
+  const sideOff = 3.5 * lockedDriftSide;
+  const back = 4.2;
+  const height = 1.15;
   _tmpPos.set(
     cp.x + _right.x * sideOff - _forward.x * back,
     cp.y + height,
     cp.z + _right.z * sideOff - _forward.z * back
   );
-  _tmpLook.set(cp.x - _forward.x * 0.2, cp.y + 0.6, cp.z - _forward.z * 0.2);
-  return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 50 };
+  // Look slightly into the slide, low — feels like a TV chase cam
+  _tmpLook.set(cp.x - _forward.x * 0.2, cp.y + 0.5, cp.z - _forward.z * 0.2);
+  return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 46 };
 }
 
 const camPos  = new THREE.Vector3(0, 4.5, -9);
@@ -2331,32 +2638,52 @@ function updateCamera(dt, phys) {
     : (1 - Math.exp(-2.8 * dt));
   driftWeight += (target - driftWeight) * k;
 
+  const isRaceCam = VIEW_MODES[viewIndex] === 'RACE_CAM';
   const v = computeViewCam(VIEW_MODES[viewIndex], phys);
   const d = computeDriftCam();
-  const pos  = v.pos.lerp(d.pos, driftWeight);
-  const look = v.look.lerp(d.look, driftWeight);
+  // Race cam never blends with drift cam — it's a TV view, the drift cam
+  // would just yank it back to the car. Use the race view as-is.
+  const driftBlend = isRaceCam ? 0 : driftWeight;
+  const pos  = v.pos.lerp(d.pos, driftBlend);
+  const look = v.look.lerp(d.look, driftBlend);
 
-  const followK = 1 - Math.exp(-3.8 * dt);
-  camPos.lerp(pos, followK);
-  const lookK = 1 - Math.exp(-5.5 * dt);
-  camLook.lerp(look, lookK);
+  // Hard cut detection for race cam: if the target position is far from
+  // the smoothed camPos, snap (don't lerp). Otherwise the cut looks like
+  // a swoosh across the world.
+  const camJumpDist = pos.distanceTo(camPos);
+  const hardCut = isRaceCam && camJumpDist > 15;
+  if (hardCut) {
+    camPos.copy(pos);
+    camLook.copy(look);
+  } else {
+    // Camera follow rate scales with car speed. At rest the camera is
+    // soft (smooth), at top speed it's nearly rigid so it can keep up
+    // with the car. Without this scaling the camera lags ~25m behind
+    // at top speed, making the car look far away.
+    const followSpeed = phys ? Math.max(3.8, phys.speed * 0.65) : 3.8;
+    const lookSpeed   = phys ? Math.max(5.5, phys.speed * 0.85) : 5.5;
+    const followK = 1 - Math.exp(-followSpeed * dt);
+    const lookK   = 1 - Math.exp(-lookSpeed * dt);
+    camPos.lerp(pos, followK);
+    camLook.lerp(look, lookK);
+  }
   camera.position.copy(camPos);
   camera.lookAt(camLook);
 
   const speedFrac = Math.min(1, phys.speed / MAX_FORWARD);
   const vFov = v.fov + v.fovSpeedAdd * speedFrac;
-  const targetFov = vFov * (1 - driftWeight) + d.fov * driftWeight;
-  const fovK = 1 - Math.exp(-6 * dt);
+  const targetFov = vFov * (1 - driftBlend) + d.fov * driftBlend;
+  const fovK = hardCut ? 1 : (1 - Math.exp(-6 * dt));
   camera.fov += (targetFov - camera.fov) * fovK;
   camera.updateProjectionMatrix();
 
   const vm = document.getElementById('viewMode');
-  if (driftWeight > 0.35) {
+  if (driftBlend > 0.35) {
     vm.classList.add('drift');
     vm.textContent = 'drift cam';
   } else {
     vm.classList.remove('drift');
-    vm.textContent = VIEW_MODES[viewIndex].toLowerCase() + ' cam';
+    vm.textContent = VIEW_MODES[viewIndex].toLowerCase().replace('_', ' ') + ' cam';
   }
 }
 
@@ -2483,8 +2810,23 @@ function updateCarVisual(dt, fwdVel) {
     p.userData.wheel.rotation.x += spin;
     if (p.userData.isFront) p.rotation.y = carState.steerAngle;
   });
-  const inHood = VIEW_MODES[viewIndex] === 'HOOD' && driftWeight < 0.4;
-  car.visible = !inHood;
+  // DRIVER POV: show cockpit interior, hide external car body.
+  // The driftWeight check means: snap back to external view if drift cam
+  // takes over (drift cam doesn't sit inside the car).
+  const inDriver = VIEW_MODES[viewIndex] === 'DRIVER' && driftWeight < 0.4;
+  cockpit.visible = inDriver;
+  // Hide only the EXTERNAL parts when in driver POV, not the whole car
+  // (because the cockpit is a child of `car`).
+  car.traverse(obj => {
+    if (obj.userData && obj.userData.external) {
+      obj.visible = !inDriver;
+    }
+  });
+  // Steering wheel rotation — driven by current steer angle, amplified
+  // for visibility (real wheels rotate ~3x the wheel angle in real cars)
+  if (steeringWheel) {
+    steeringWheel.rotation.z = carState.steerAngle * 3.2;
+  }
 }
 
 function updateHUD(speed, isDrifting) {
@@ -2586,9 +2928,11 @@ function animate(now) {
   sun.position.set(carState.position.x + sunOffset.x, sunOffset.y, carState.position.z + sunOffset.z);
   sunGlow.position.copy(sun.position).add(new THREE.Vector3(0, 0, 1));
 
-  // Motion blur
+  // Motion blur — boosted during drift, scaled overall for stronger speed perception
   const speedFrac = Math.min(1, phys.speed / MAX_FORWARD);
-  const blurTarget = Math.pow(speedFrac, 1.3) * 0.85;
+  const driftBlurBoost = phys.isDrifting ? 0.6 : 0;
+  // Stronger blur scaling — was 0.85, now 1.2 — makes high speed feel ~1.4× faster
+  const blurTarget = Math.min(1.5, Math.pow(speedFrac, 1.1) * 1.2 + driftBlurBoost);
   const cur = radialBlurPass.uniforms.blurStrength.value;
   radialBlurPass.uniforms.blurStrength.value = cur + (blurTarget - cur) * (1 - Math.exp(-3.5 * dt));
 
