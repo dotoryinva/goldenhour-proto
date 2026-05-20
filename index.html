@@ -39,6 +39,77 @@
     margin-top: 6px; text-transform: uppercase;
   }
 
+  /* Minimap (only visible on fixed-loop tracks) */
+  #minimap {
+    position: fixed;
+    top: 24px; right: 28px;
+    width: 180px; height: 180px;
+    background: rgba(20, 12, 16, 0.45);
+    border: 1px solid rgba(255, 230, 200, 0.18);
+    border-radius: 6px;
+    pointer-events: none;
+    display: none;
+    backdrop-filter: blur(4px);
+  }
+  #minimap.show { display: block; }
+  #minimap canvas {
+    display: block;
+    width: 100%; height: 100%;
+    border-radius: 6px;
+  }
+  #minimapLabel {
+    position: absolute;
+    bottom: -18px; left: 0; right: 0;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+  }
+
+  /* Lap timing panel — below the minimap, only visible on fixed-loop maps */
+  #lapPanel {
+    position: fixed;
+    top: 240px; right: 28px;
+    width: 180px;
+    padding: 12px 14px;
+    background: rgba(20, 12, 16, 0.45);
+    border: 1px solid rgba(255, 230, 200, 0.18);
+    border-radius: 6px;
+    pointer-events: none;
+    display: none;
+    backdrop-filter: blur(4px);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  #lapPanel.show { display: block; }
+  #lapPanel.newBest {
+    border-color: rgba(255, 176, 112, 0.8);
+    box-shadow: 0 0 30px rgba(255, 176, 112, 0.4);
+  }
+  .lapRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 4px;
+  }
+  .lapRow:last-child { margin-bottom: 0; }
+  .lapLabel {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+  }
+  .lapValue {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    color: var(--warm);
+    font-variant-numeric: tabular-nums;
+  }
+  .lapValue.dim { opacity: 0.55; }
+  .lapValue.best { color: var(--accent); }
+
   #hud {
     position: fixed; bottom: 28px; left: 28px;
     color: var(--warm);
@@ -244,13 +315,65 @@
     text-transform: uppercase;
     margin-bottom: 56px;
   }
+  .menuSectionLabel {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 5px;
+    color: var(--warm-dim);
+    margin-bottom: 14px;
+    margin-top: 8px;
+  }
   #carRow {
     display: flex;
-    gap: 18px;
-    margin-bottom: 44px;
+    gap: 14px;
+    margin-bottom: 24px;
     max-width: 1100px;
     flex-wrap: wrap;
     justify-content: center;
+  }
+  #mapRow {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 30px;
+    max-width: 900px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .mapCard {
+    width: 200px;
+    background: rgba(255, 230, 200, 0.05);
+    border: 1px solid rgba(255, 230, 200, 0.12);
+    border-radius: 6px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    color: var(--warm);
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    user-select: none;
+  }
+  .mapCard:hover {
+    background: rgba(255, 230, 200, 0.08);
+    border-color: rgba(255, 230, 200, 0.25);
+    transform: translateY(-2px);
+  }
+  .mapCard.selected {
+    border-color: var(--accent);
+    background: rgba(255, 176, 112, 0.10);
+    box-shadow: 0 0 25px rgba(255, 176, 112, 0.15);
+  }
+  .mapName {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .mapDesc {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--warm-dim);
+    line-height: 1.5;
   }
   .carCard {
     width: 180px;
@@ -367,15 +490,29 @@
 
 <div id="menu">
   <div id="menuTitle">Golden Hour</div>
-  <div id="menuSub">choose your machine</div>
+  <div id="menuSub">choose your machine and your route</div>
+  <div class="menuSectionLabel">CAR</div>
   <div id="carRow"></div>
+  <div class="menuSectionLabel">MAP</div>
+  <div id="mapRow"></div>
   <button id="menuStart">drive</button>
-  <div id="menuHint">← → to browse · enter to start</div>
+  <div id="menuHint">← → cars · ↑ ↓ maps · enter to start</div>
 </div>
 
 <div id="title">
   Golden Hour
   <span class="sub">drift · prototype v0.4</span>
+</div>
+
+<div id="minimap">
+  <canvas id="minimapCanvas" width="360" height="360"></canvas>
+  <div id="minimapLabel">map</div>
+</div>
+
+<div id="lapPanel">
+  <div class="lapRow"><span class="lapLabel">lap</span><span class="lapValue" id="lapTime">--:--.---</span></div>
+  <div class="lapRow"><span class="lapLabel">last</span><span class="lapValue dim" id="lapLast">--:--.---</span></div>
+  <div class="lapRow"><span class="lapLabel">best</span><span class="lapValue best" id="lapBest">--:--.---</span></div>
 </div>
 
 <div id="hud">
@@ -478,6 +615,36 @@ const radialBlurPass = new THREE.ShaderPass(RadialBlurShader);
 composer.addPass(radialBlurPass);
 
 // ====================================================================
+//  THEMES — per-map visual atmosphere
+// ====================================================================
+const THEMES = {
+  desert: {
+    // Warm sunset desert — current default look
+    skyTop: 0x3a1f3f, skyMid: 0xff6a3a, skyHorizon: 0xffc580, skyGround: 0x6a2535,
+    fogColor: 0xff9560, fogDensity: 0.0042,
+    groundColor: 0x9a5a3c,
+    mountainNear: 0x4a1f30, mountainFar: 0x6a2a3a,
+    ambientLight: 0xffb088, ambientIntensity: 0.55,
+    sunLight: 0xffc090, sunIntensity: 1.15,
+    rimLight: 0x6a4488, rimIntensity: 0.35,
+    sunColor: 0xfff0c0, sunGlow: 0xffa860,
+    scenery: 'desert',  // cacti + pillars + trees
+  },
+  forest: {
+    // Late-afternoon forest — cooler, muted greens with a soft golden horizon
+    skyTop: 0x1e2840, skyMid: 0x6a8470, skyHorizon: 0xd0c890, skyGround: 0x1a2a1a,
+    fogColor: 0x809074, fogDensity: 0.0055,
+    groundColor: 0x2a4022,
+    mountainNear: 0x1a2818, mountainFar: 0x2c3826,
+    ambientLight: 0xa8c098, ambientIntensity: 0.60,
+    sunLight: 0xfff2d0, sunIntensity: 1.05,
+    rimLight: 0x5a7050, rimIntensity: 0.35,
+    sunColor: 0xfff8e0, sunGlow: 0xc8b888,
+    scenery: 'forest',  // trees only
+  },
+};
+
+// ====================================================================
 //  SKY / SUN / FOG
 // ====================================================================
 scene.fog = new THREE.FogExp2(0xff9560, 0.0042);
@@ -534,7 +701,8 @@ scene.add(sunGlow);
 // ====================================================================
 //  LIGHTING
 // ====================================================================
-scene.add(new THREE.AmbientLight(0xffb088, 0.55));
+const ambientLight = new THREE.AmbientLight(0xffb088, 0.55);
+scene.add(ambientLight);
 
 const sunLight = new THREE.DirectionalLight(0xffc090, 1.15);
 sunLight.position.set(-60, 70, -120);
@@ -588,6 +756,34 @@ scene.add(mtnNear);
 scene.add(mtnFar);
 // We'll re-center these around the car each frame so they always feel "out there"
 
+// Theme-aware references for runtime updates
+function applyMapTheme(themeId) {
+  const t = THEMES[themeId] || THEMES.desert;
+  // Sky shader uniforms
+  skyMat.uniforms.topColor.value.setHex(t.skyTop);
+  skyMat.uniforms.midColor.value.setHex(t.skyMid);
+  skyMat.uniforms.horizonColor.value.setHex(t.skyHorizon);
+  skyMat.uniforms.groundColor.value.setHex(t.skyGround);
+  // Fog
+  scene.fog.color.setHex(t.fogColor);
+  scene.fog.density = t.fogDensity;
+  // Ground
+  ground.material.color.setHex(t.groundColor);
+  // Mountains — recolor each child mesh
+  for (const m of mtnNear.children) m.material.color.setHex(t.mountainNear);
+  for (const m of mtnFar.children)  m.material.color.setHex(t.mountainFar);
+  // Lights
+  ambientLight.color.setHex(t.ambientLight);
+  ambientLight.intensity = t.ambientIntensity;
+  sunLight.color.setHex(t.sunLight);
+  sunLight.intensity = t.sunIntensity;
+  rimLight.color.setHex(t.rimLight);
+  rimLight.intensity = t.rimIntensity;
+  // Sun visuals
+  sun.material.color.setHex(t.sunColor);
+  sunGlow.material.color.setHex(t.sunGlow);
+}
+
 // ====================================================================
 //  INFINITE ROAD — chunked centerline + meshes
 // ====================================================================
@@ -595,12 +791,422 @@ scene.add(mtnFar);
 // an arc/straight event chain forward. Each chunk owns its meshes and
 // scenery, and gets disposed when it's far behind the car.
 
-const ROAD_WIDTH = 22;
-const ROAD_HALF = ROAD_WIDTH / 2;
+let ROAD_WIDTH = 22;
+let ROAD_HALF = ROAD_WIDTH / 2;
 const CHUNK_TARGET_LENGTH = 220;  // meters per chunk (roughly)
 const POINT_STEP = 4;             // meters between centerline samples
 const CHUNKS_AHEAD = 8;           // how many chunks to keep generated ahead
 const CHUNKS_BEHIND = 2;          // how many chunks to keep behind
+
+// ====================================================================
+//  MAP CATALOG
+// ====================================================================
+// Three modes:
+//   procedural_infinite — current behavior; endless desert, curves & hairpins
+//   procedural_straight — endless straight road for top-speed testing
+//   fixed_loop          — closed circuit built from control points, with barriers
+//
+// Fixed loops are generated once at load (no streaming). Control points are
+// traced from the reference circuit map and interpolated smoothly via Catmull-Rom.
+// ====================================================================
+
+const MAPS = [
+  {
+    id: 'desert',
+    name: 'Nevada Desert',
+    description: 'Endless procedural · sunset highway',
+    type: 'procedural_infinite',
+    theme: 'desert',
+    roadWidth: 22, // wide desert highway
+  },
+  {
+    id: 'nurburgring',
+    name: 'Nürburgring',
+    description: 'Real geometry · OSM data · 20.8 km',
+    type: 'fixed_loop',
+    theme: 'forest',
+    roadWidth: 11, // real Nordschleife is 8-10m wide — narrow circuit
+    // Nürburgring Nordschleife — clean route from OSM relation 38566.
+    // Uses ONLY the named single-LineString route feature (Feature 0).
+    // Long straight segments are subdivided with intermediate points every ~80m
+    // so the Catmull-Rom interpolation doesn't bulge across sparse straights.
+    // 361 control points total, 20.8km actual Nordschleife length.
+    controlPoints: [
+      [    -0.00, 0.00,      0.00],
+      [    77.04, 0.00,     -0.00],
+      [   154.09, 0.00,     -0.00],
+      [   231.13, 0.00,     -0.00],
+      [   308.18, 0.00,     -0.00],
+      [   385.22, 0.00,     -0.00],
+      [   462.26, 0.00,     -0.00],
+      [   539.31, 0.00,     -0.00],
+      [   616.35, 0.00,     -0.00],
+      [   693.40, 0.00,     -0.00],
+      [   770.44, 0.00,     -0.00],
+      [   847.48, 0.00,     -0.00],
+      [   924.53, 0.00,     -0.00],
+      [  1001.57, 0.00,     -0.00],
+      [  1079.96, 0.00,      1.49],
+      [  1158.34, 0.00,      2.98],
+      [  1236.73, 0.00,      4.48],
+      [  1315.11, 0.00,      5.97],
+      [  1393.50, 0.00,      7.46],
+      [  1471.88, 0.00,      8.95],
+      [  1550.27, 0.00,     10.44],
+      [  1628.66, 0.00,     11.93],
+      [  1707.04, 0.00,     13.43],
+      [  1785.43, 0.00,     14.92],
+      [  1863.81, 0.00,     16.41],
+      [  1942.20, 0.00,     17.90],
+      [  2012.04, 0.00,     31.65],
+      [  2084.28, 0.00,     57.18],
+      [  2156.52, 0.00,     82.71],
+      [  2228.77, 0.00,    108.23],
+      [  2301.01, 0.00,    133.76],
+      [  2364.47, 0.00,    169.16],
+      [  2427.93, 0.00,    204.56],
+      [  2495.67, 0.00,    221.23],
+      [  2563.40, 0.00,    237.89],
+      [  2630.56, 0.00,    279.75],
+      [  2644.58, 0.00,    282.21],
+      [  2660.19, 0.00,    277.88],
+      [  2704.68, 0.00,    246.21],
+      [  2785.58, 0.00,    246.75],
+      [  2802.09, 0.00,    236.13],
+      [  2837.92, 0.00,    144.79],
+      [  2851.73, 0.00,     82.94],
+      [  2858.84, 0.00,      1.31],
+      [  2873.62, 0.00,    -18.00],
+      [  2913.45, 0.00,    -12.86],
+      [  2965.23, 0.00,     17.26],
+      [  3017.02, 0.00,     47.38],
+      [  3062.66, 0.00,     59.98],
+      [  3110.09, 0.00,     61.42],
+      [  3181.48, 0.00,     53.18],
+      [  3225.82, 0.00,     32.81],
+      [  3249.83, 0.00,      6.22],
+      [  3280.80, 0.00,    -43.95],
+      [  3311.78, 0.00,    -94.12],
+      [  3341.00, 0.00,   -127.44],
+      [  3395.39, 0.00,   -168.05],
+      [  3449.79, 0.00,   -208.67],
+      [  3517.80, 0.00,   -223.97],
+      [  3541.13, 0.00,   -250.99],
+      [  3555.40, 0.00,   -306.97],
+      [  3551.17, 0.00,   -377.96],
+      [  3580.95, 0.00,   -450.11],
+      [  3571.84, 0.00,   -494.89],
+      [  3573.50, 0.00,   -518.62],
+      [  3585.12, 0.00,   -535.29],
+      [  3635.10, 0.00,   -577.92],
+      [  3685.08, 0.00,   -620.55],
+      [  3702.51, 0.00,   -648.13],
+      [  3703.70, 0.00,   -670.27],
+      [  3679.89, 0.00,   -725.10],
+      [  3679.08, 0.00,   -752.60],
+      [  3707.34, 0.00,   -818.23],
+      [  3735.60, 0.00,   -883.87],
+      [  3763.86, 0.00,   -949.50],
+      [  3792.12, 0.00,  -1015.14],
+      [  3820.38, 0.00,  -1080.77],
+      [  3830.23, 0.00,  -1146.78],
+      [  3840.09, 0.00,  -1212.78],
+      [  3849.94, 0.00,  -1278.79],
+      [  3859.80, 0.00,  -1344.79],
+      [  3869.65, 0.00,  -1410.80],
+      [  3862.48, 0.00,  -1457.33],
+      [  3818.53, 0.00,  -1542.61],
+      [  3775.06, 0.00,  -1576.96],
+      [  3731.58, 0.00,  -1611.30],
+      [  3688.10, 0.00,  -1645.64],
+      [  3648.30, 0.00,  -1695.22],
+      [  3608.49, 0.00,  -1744.80],
+      [  3568.69, 0.00,  -1794.37],
+      [  3535.84, 0.00,  -1860.40],
+      [  3502.99, 0.00,  -1926.42],
+      [  3483.71, 0.00,  -1982.35],
+      [  3464.43, 0.00,  -2038.27],
+      [  3453.29, 0.00,  -2115.92],
+      [  3442.15, 0.00,  -2193.57],
+      [  3431.02, 0.00,  -2271.22],
+      [  3419.88, 0.00,  -2348.87],
+      [  3408.74, 0.00,  -2426.52],
+      [  3397.61, 0.00,  -2504.17],
+      [  3404.34, 0.00,  -2559.75],
+      [  3422.49, 0.00,  -2617.16],
+      [  3457.41, 0.00,  -2672.85],
+      [  3492.33, 0.00,  -2728.53],
+      [  3527.26, 0.00,  -2784.21],
+      [  3527.90, 0.00,  -2816.70],
+      [  3516.70, 0.00,  -2838.25],
+      [  3492.02, 0.00,  -2857.03],
+      [  3461.36, 0.00,  -2861.54],
+      [  3399.31, 0.00,  -2852.04],
+      [  3337.25, 0.00,  -2842.53],
+      [  3275.20, 0.00,  -2833.03],
+      [  3191.21, 0.00,  -2829.59],
+      [  3126.43, 0.00,  -2843.65],
+      [  3034.04, 0.00,  -2849.13],
+      [  2977.50, 0.00,  -2863.87],
+      [  2920.96, 0.00,  -2878.62],
+      [  2864.42, 0.00,  -2893.36],
+      [  2774.30, 0.00,  -2906.11],
+      [  2711.95, 0.00,  -2922.75],
+      [  2658.95, 0.00,  -2946.29],
+      [  2615.78, 0.00,  -2977.95],
+      [  2572.61, 0.00,  -3009.62],
+      [  2529.43, 0.00,  -3041.28],
+      [  2499.92, 0.00,  -3090.64],
+      [  2470.41, 0.00,  -3140.00],
+      [  2450.39, 0.00,  -3159.99],
+      [  2419.79, 0.00,  -3173.36],
+      [  2362.39, 0.00,  -3177.56],
+      [  2332.85, 0.00,  -3195.59],
+      [  2319.98, 0.00,  -3215.05],
+      [  2322.56, 0.00,  -3267.99],
+      [  2303.99, 0.00,  -3290.43],
+      [  2238.26, 0.00,  -3307.23],
+      [  2160.93, 0.00,  -3316.49],
+      [  2083.61, 0.00,  -3325.75],
+      [  2034.85, 0.00,  -3341.42],
+      [  1986.09, 0.00,  -3357.09],
+      [  1922.81, 0.00,  -3371.76],
+      [  1859.52, 0.00,  -3386.43],
+      [  1796.24, 0.00,  -3401.10],
+      [  1742.73, 0.00,  -3424.49],
+      [  1689.22, 0.00,  -3447.88],
+      [  1658.63, 0.00,  -3472.21],
+      [  1638.03, 0.00,  -3502.19],
+      [  1619.06, 0.00,  -3560.37],
+      [  1600.08, 0.00,  -3618.55],
+      [  1592.88, 0.00,  -3658.25],
+      [  1609.28, 0.00,  -3689.50],
+      [  1661.80, 0.00,  -3720.59],
+      [  1679.20, 0.00,  -3740.80],
+      [  1709.17, 0.00,  -3806.59],
+      [  1739.14, 0.00,  -3872.38],
+      [  1734.09, 0.00,  -3907.14],
+      [  1722.45, 0.00,  -3921.30],
+      [  1703.42, 0.00,  -3929.33],
+      [  1636.75, 0.00,  -3925.96],
+      [  1570.09, 0.00,  -3922.58],
+      [  1471.67, 0.00,  -3937.77],
+      [  1443.80, 0.00,  -3955.70],
+      [  1401.64, 0.00,  -4004.26],
+      [  1322.52, 0.00,  -4045.53],
+      [  1286.97, 0.00,  -4057.52],
+      [  1259.04, 0.00,  -4059.04],
+      [  1214.76, 0.00,  -4049.02],
+      [  1158.72, 0.00,  -3999.73],
+      [  1129.99, 0.00,  -3937.74],
+      [  1101.26, 0.00,  -3875.74],
+      [  1072.53, 0.00,  -3813.75],
+      [  1076.62, 0.00,  -3747.01],
+      [  1062.78, 0.00,  -3725.12],
+      [  1044.13, 0.00,  -3721.39],
+      [  1007.97, 0.00,  -3739.46],
+      [   986.46, 0.00,  -3743.33],
+      [   923.17, 0.00,  -3722.04],
+      [   869.45, 0.00,  -3693.43],
+      [   815.73, 0.00,  -3664.82],
+      [   762.01, 0.00,  -3636.21],
+      [   711.20, 0.00,  -3587.62],
+      [   660.38, 0.00,  -3539.04],
+      [   640.48, 0.00,  -3528.05],
+      [   608.02, 0.00,  -3530.40],
+      [   558.69, 0.00,  -3557.36],
+      [   531.04, 0.00,  -3583.90],
+      [   493.11, 0.00,  -3649.76],
+      [   464.40, 0.00,  -3662.62],
+      [   395.66, 0.00,  -3655.64],
+      [   329.50, 0.00,  -3642.29],
+      [   263.34, 0.00,  -3628.94],
+      [   191.82, 0.00,  -3605.48],
+      [   120.29, 0.00,  -3582.02],
+      [    48.76, 0.00,  -3558.56],
+      [   -22.77, 0.00,  -3535.10],
+      [   -54.65, 0.00,  -3533.17],
+      [  -117.07, 0.00,  -3538.75],
+      [  -179.48, 0.00,  -3544.34],
+      [  -241.90, 0.00,  -3549.92],
+      [  -290.40, 0.00,  -3530.78],
+      [  -304.58, 0.00,  -3510.73],
+      [  -308.17, 0.00,  -3493.44],
+      [  -290.94, 0.00,  -3432.39],
+      [  -260.23, 0.00,  -3386.95],
+      [  -229.52, 0.00,  -3341.51],
+      [  -198.81, 0.00,  -3296.07],
+      [  -170.87, 0.00,  -3244.18],
+      [  -142.93, 0.00,  -3192.28],
+      [  -120.38, 0.00,  -3134.06],
+      [  -113.32, 0.00,  -3084.40],
+      [  -106.26, 0.00,  -3034.75],
+      [  -118.73, 0.00,  -2980.28],
+      [  -131.20, 0.00,  -2925.82],
+      [  -167.99, 0.00,  -2852.97],
+      [  -208.74, 0.00,  -2798.78],
+      [  -249.50, 0.00,  -2744.59],
+      [  -290.26, 0.00,  -2690.40],
+      [  -344.31, 0.00,  -2658.15],
+      [  -398.36, 0.00,  -2625.90],
+      [  -452.41, 0.00,  -2593.66],
+      [  -514.61, 0.00,  -2545.53],
+      [  -576.82, 0.00,  -2497.41],
+      [  -639.03, 0.00,  -2449.29],
+      [  -678.91, 0.00,  -2407.54],
+      [  -718.79, 0.00,  -2365.79],
+      [  -758.67, 0.00,  -2324.03],
+      [  -794.15, 0.00,  -2269.65],
+      [  -821.42, 0.00,  -2201.67],
+      [  -848.69, 0.00,  -2133.70],
+      [  -889.15, 0.00,  -2074.16],
+      [  -929.60, 0.00,  -2014.62],
+      [  -950.35, 0.00,  -1999.08],
+      [ -1002.05, 0.00,  -1977.19],
+      [ -1053.63, 0.00,  -1970.75],
+      [ -1153.06, 0.00,  -1968.04],
+      [ -1216.27, 0.00,  -1977.02],
+      [ -1279.49, 0.00,  -1986.01],
+      [ -1342.71, 0.00,  -1994.99],
+      [ -1378.38, 0.00,  -1993.10],
+      [ -1438.01, 0.00,  -1969.34],
+      [ -1497.64, 0.00,  -1945.58],
+      [ -1557.27, 0.00,  -1921.82],
+      [ -1636.79, 0.00,  -1897.39],
+      [ -1653.34, 0.00,  -1880.76],
+      [ -1659.24, 0.00,  -1860.60],
+      [ -1656.51, 0.00,  -1843.06],
+      [ -1633.48, 0.00,  -1813.34],
+      [ -1613.01, 0.00,  -1801.83],
+      [ -1551.88, 0.00,  -1792.70],
+      [ -1490.75, 0.00,  -1783.57],
+      [ -1429.62, 0.00,  -1774.45],
+      [ -1366.18, 0.00,  -1770.96],
+      [ -1302.74, 0.00,  -1767.48],
+      [ -1288.56, 0.00,  -1755.81],
+      [ -1282.60, 0.00,  -1732.83],
+      [ -1290.15, 0.00,  -1714.82],
+      [ -1311.15, 0.00,  -1703.02],
+      [ -1332.56, 0.00,  -1706.49],
+      [ -1382.19, 0.00,  -1738.54],
+      [ -1464.45, 0.00,  -1749.45],
+      [ -1523.16, 0.00,  -1736.17],
+      [ -1581.87, 0.00,  -1722.89],
+      [ -1640.58, 0.00,  -1709.61],
+      [ -1691.48, 0.00,  -1688.60],
+      [ -1742.38, 0.00,  -1667.60],
+      [ -1799.68, 0.00,  -1673.07],
+      [ -1856.97, 0.00,  -1678.55],
+      [ -1902.69, 0.00,  -1692.54],
+      [ -1970.20, 0.00,  -1726.87],
+      [ -1984.18, 0.00,  -1745.05],
+      [ -2006.78, 0.00,  -1802.63],
+      [ -2029.43, 0.00,  -1825.82],
+      [ -2080.24, 0.00,  -1849.07],
+      [ -2131.06, 0.00,  -1872.32],
+      [ -2175.59, 0.00,  -1867.84],
+      [ -2198.09, 0.00,  -1849.80],
+      [ -2239.31, 0.00,  -1784.45],
+      [ -2298.20, 0.00,  -1726.78],
+      [ -2359.23, 0.00,  -1654.23],
+      [ -2370.80, 0.00,  -1624.61],
+      [ -2376.12, 0.00,  -1555.01],
+      [ -2385.96, 0.00,  -1522.70],
+      [ -2413.33, 0.00,  -1484.18],
+      [ -2456.71, 0.00,  -1452.27],
+      [ -2471.66, 0.00,  -1430.45],
+      [ -2482.50, 0.00,  -1374.42],
+      [ -2493.35, 0.00,  -1318.38],
+      [ -2497.16, 0.00,  -1264.55],
+      [ -2488.03, 0.00,  -1236.81],
+      [ -2469.77, 0.00,  -1212.35],
+      [ -2425.97, 0.00,  -1181.11],
+      [ -2382.17, 0.00,  -1149.87],
+      [ -2337.96, 0.00,  -1109.56],
+      [ -2327.32, 0.00,  -1090.11],
+      [ -2326.03, 0.00,  -1065.94],
+      [ -2340.95, 0.00,  -1011.64],
+      [ -2357.78, 0.00,   -985.75],
+      [ -2409.27, 0.00,   -937.36],
+      [ -2419.90, 0.00,   -911.13],
+      [ -2416.73, 0.00,   -888.73],
+      [ -2385.88, 0.00,   -823.84],
+      [ -2355.03, 0.00,   -758.95],
+      [ -2340.31, 0.00,   -739.98],
+      [ -2308.49, 0.00,   -726.17],
+      [ -2279.68, 0.00,   -729.94],
+      [ -2226.86, 0.00,   -766.43],
+      [ -2174.04, 0.00,   -802.91],
+      [ -2121.22, 0.00,   -839.40],
+      [ -2091.59, 0.00,   -851.18],
+      [ -2068.10, 0.00,   -849.25],
+      [ -2004.65, 0.00,   -800.85],
+      [ -1948.04, 0.00,   -778.32],
+      [ -1891.44, 0.00,   -755.79],
+      [ -1817.56, 0.00,   -699.71],
+      [ -1799.71, 0.00,   -676.93],
+      [ -1767.84, 0.00,   -606.02],
+      [ -1727.60, 0.00,   -538.50],
+      [ -1687.37, 0.00,   -470.97],
+      [ -1666.56, 0.00,   -449.56],
+      [ -1618.08, 0.00,   -431.59],
+      [ -1579.43, 0.00,   -425.71],
+      [ -1530.44, 0.00,   -439.58],
+      [ -1481.45, 0.00,   -453.44],
+      [ -1436.72, 0.00,   -452.80],
+      [ -1361.45, 0.00,   -430.98],
+      [ -1286.18, 0.00,   -409.16],
+      [ -1226.26, 0.00,   -370.58],
+      [ -1166.33, 0.00,   -332.00],
+      [ -1119.84, 0.00,   -311.08],
+      [ -1061.64, 0.00,   -301.13],
+      [ -1000.96, 0.00,   -306.31],
+      [  -903.12, 0.00,   -298.12],
+      [  -838.78, 0.00,   -318.01],
+      [  -774.44, 0.00,   -337.90],
+      [  -717.27, 0.00,   -349.67],
+      [  -660.09, 0.00,   -361.45],
+      [  -602.91, 0.00,   -373.23],
+      [  -526.42, 0.00,   -407.81],
+      [  -494.40, 0.00,   -442.34],
+      [  -474.07, 0.00,   -496.98],
+      [  -453.74, 0.00,   -551.62],
+      [  -419.09, 0.00,   -580.94],
+      [  -381.46, 0.00,   -586.18],
+      [  -312.34, 0.00,   -582.55],
+      [  -243.23, 0.00,   -578.92],
+      [  -212.32, 0.00,   -571.29],
+      [  -195.96, 0.00,   -555.70],
+      [  -191.10, 0.00,   -536.06],
+      [  -201.59, 0.00,   -474.32],
+      [  -214.15, 0.00,   -439.73],
+      [  -252.74, 0.00,   -382.75],
+      [  -302.87, 0.00,   -323.22],
+      [  -353.00, 0.00,   -263.69],
+      [  -361.92, 0.00,   -244.81],
+      [  -364.50, 0.00,   -168.55],
+      [  -345.36, 0.00,    -95.46],
+      [  -327.78, 0.00,    -59.44],
+      [  -303.44, 0.00,    -30.95],
+      [  -277.34, 0.00,    -12.24],
+      [  -240.25, 0.00,      2.52],
+      [  -194.59, 0.00,      7.38],
+      [  -129.73, 0.00,      4.92],
+      [   -64.86, 0.00,      2.46],
+    ],
+    spawn: { x: 0, z: 0, heading: 1.5708 }, // due east along start straight
+  },
+  {
+    id: 'straight',
+    name: 'Speed Run',
+    description: 'Infinite straight · top speed testing',
+    type: 'procedural_straight',
+    theme: 'desert',
+    roadWidth: 22,
+  },
+];
+
+let CURRENT_MAP = MAPS[0]; // set by menu
 
 // "Pen" state — like a turtle that walks forward emitting points.
 // We now use CONTINUOUS curvature driven by smooth noise, instead of
@@ -649,6 +1255,10 @@ let nextHairpinAt = 600;
 let currentHairpin = null; // { kind, direction, remaining, peak }
 
 function targetCurvatureAt(distance, currentHeading) {
+  // Straight mode: dead-straight road, no curves, no hairpins
+  if (CURRENT_MAP && CURRENT_MAP.type === 'procedural_straight') {
+    return 0;
+  }
   // -- BASE: continuous smooth curvature from noise --
   const a = smoothNoise(noiseA, distance, NOISE_SPACING_A);
   const b = smoothNoise(noiseB, distance, NOISE_SPACING_B);
@@ -892,12 +1502,37 @@ function nearestRoadPointAligned(x, z, headingX, headingZ, searchRadius) {
   return { d2: bestD2, idx: bestIdx };
 }
 
-// Tangent / perpendicular at an index into ROAD_POINTS (returns nulls if out of range)
+// Tangent / perpendicular at an index into ROAD_POINTS.
+// For fixed-loop maps, wraps around so index 0 and N-1 have correct neighbors.
 function tanPerpAt(i) {
   const p = ROAD_POINTS[i];
   if (!p) return { t: null, p: null };
-  let prev = ROAD_POINTS[i - 1];
-  let next = ROAD_POINTS[i + 1];
+  const isLoop = CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop' && nextChunkIdx > 0;
+  let prev, next;
+  if (isLoop) {
+    const N = nextChunkIdx;
+    // CRITICAL: don't wrap-around near the closure seam. The closure
+    // approach direction differs from the start straight direction, so
+    // averaging them gives a sideways tangent and creates wedge/triangle
+    // artifacts. Within 4 indices of either boundary, use one-sided neighbors.
+    const SEAM_ZONE = 4;
+    if (i < SEAM_ZONE) {
+      // Near start: only use forward neighbors (the closure side is the wrong direction)
+      prev = ROAD_POINTS[i - 1]; // null at i=0, that's fine
+      next = ROAD_POINTS[i + 1]; // always exists for i < N-1
+    } else if (i >= N - SEAM_ZONE) {
+      // Near end: only use backward neighbors
+      prev = ROAD_POINTS[i - 1];
+      next = ROAD_POINTS[i + 1]; // null at i=N-1
+    } else {
+      // Far from the seam — safe to use both neighbors directly (no wrap needed)
+      prev = ROAD_POINTS[i - 1];
+      next = ROAD_POINTS[i + 1];
+    }
+  } else {
+    prev = ROAD_POINTS[i - 1];
+    next = ROAD_POINTS[i + 1];
+  }
   let t;
   if (prev && next) t = next.clone().sub(prev);
   else if (next)    t = next.clone().sub(p);
@@ -918,20 +1553,28 @@ function buildChunkMeshes(startIdx, endIdx) {
   const Y_ASPHALT = 0.02;
   const Y_LINE    = 0.028;
 
+  // With the tanPerpAt seam-zone fix in place, we can build meshes across
+  // the full range. The first/last few indices use one-sided differencing
+  // for their tangent which keeps perpendiculars pointing the right way.
+  const meshEndIdx = endIdx;
+
   // --- Asphalt ribbon ---
   const asPos = [], asIdx = [];
-  for (let i = startIdx; i < endIdx; i++) {
+  for (let i = startIdx; i < meshEndIdx; i++) {
     const { p: perp } = tanPerpAt(i);
     const c = ROAD_POINTS[i];
+    const yA = c.y + Y_ASPHALT;
     const L = c.clone().addScaledVector(perp,  ROAD_HALF);
     const R = c.clone().addScaledVector(perp, -ROAD_HALF);
-    asPos.push(L.x, Y_ASPHALT, L.z, R.x, Y_ASPHALT, R.z);
+    asPos.push(L.x, yA, L.z, R.x, yA, R.z);
   }
-  const ringCount = endIdx - startIdx;
+  const ringCount = meshEndIdx - startIdx;
   for (let i = 0; i < ringCount - 1; i++) {
     const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
     asIdx.push(a, c, b, b, c, d);
   }
+  // NOTE: No wrap-around quad — connecting ring[N-1] to ring[0] creates a
+  // twisted bowtie polygon at the closure because approach/departure angles differ.
   const asGeo = new THREE.BufferGeometry();
   asGeo.setAttribute('position', new THREE.Float32BufferAttribute(asPos, 3));
   asGeo.setIndex(asIdx);
@@ -944,16 +1587,21 @@ function buildChunkMeshes(startIdx, endIdx) {
   scene.add(asphalt);
   meshes.push(asphalt);
 
-  // --- Edge lines ---
-  function buildEdgeLine(sideSign, width) {
+  // --- Edge lines + colored kerb stripes ---
+  // Two-tone treatment per side: a wide RED kerb just outside the white line,
+  // and the WHITE edge line itself. This makes the road clearly visible at
+  // distance — especially needed since barriers are invisible.
+  function buildEdgeStrip(sideSign, insetFromEdge, width, color) {
     const pos = [], idx = [];
-    const inset = ROAD_HALF - 0.35;
-    for (let i = startIdx; i < endIdx; i++) {
+    for (let i = startIdx; i < meshEndIdx; i++) {
       const { p: perp } = tanPerpAt(i);
       const c = ROAD_POINTS[i];
-      const inner = c.clone().addScaledVector(perp, sideSign * (inset - width));
-      const outer = c.clone().addScaledVector(perp, sideSign * inset);
-      pos.push(inner.x, Y_LINE, inner.z, outer.x, Y_LINE, outer.z);
+      const yL = c.y + Y_LINE;
+      const innerDist = insetFromEdge + width;
+      const outerDist = insetFromEdge;
+      const inner = c.clone().addScaledVector(perp, sideSign * (ROAD_HALF - innerDist));
+      const outer = c.clone().addScaledVector(perp, sideSign * (ROAD_HALF - outerDist));
+      pos.push(inner.x, yL, inner.z, outer.x, yL, outer.z);
     }
     for (let i = 0; i < ringCount - 1; i++) {
       const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
@@ -962,11 +1610,17 @@ function buildChunkMeshes(startIdx, endIdx) {
     const g = new THREE.BufferGeometry();
     g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
     g.setIndex(idx);
-    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf5e3c0 }));
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color }));
     scene.add(m); meshes.push(m);
   }
-  buildEdgeLine(1, 0.22);
-  buildEdgeLine(-1, 0.22);
+  // Red Nordschleife kerb stripe — scales with road width so it's proportional
+  const kerbW = Math.max(0.5, ROAD_WIDTH * 0.06);   // ~0.7m on 11m road, ~1.4m on 22m
+  const lineW = Math.max(0.15, ROAD_WIDTH * 0.01);  // ~0.15m on 11m road, ~0.22m on 22m
+  buildEdgeStrip(+1, 0.05, kerbW, 0xc8423a);
+  buildEdgeStrip(-1, 0.05, kerbW, 0xc8423a);
+  // White edge line — inside the kerb
+  buildEdgeStrip(+1, kerbW + 0.1, lineW, 0xf5e3c0);
+  buildEdgeStrip(-1, kerbW + 0.1, lineW, 0xf5e3c0);
 
   // --- Dashed centerline ---
   const dashPos = [], dashIdx = [];
@@ -975,17 +1629,19 @@ function buildChunkMeshes(startIdx, endIdx) {
   const cycle = dashOn + dashOff;
   let v = 0;
   // Use the global index to keep the dash pattern continuous across chunks
-  for (let i = startIdx; i < endIdx - 1; i++) {
+  for (let i = startIdx; i < meshEndIdx - 1; i++) {
     if (i % cycle >= dashOn) continue;
     const { p: perp }  = tanPerpAt(i);
     const { p: perp2 } = tanPerpAt(i + 1);
     const p1 = ROAD_POINTS[i], p2 = ROAD_POINTS[i + 1];
+    const y1 = p1.y + Y_LINE;
+    const y2 = p2.y + Y_LINE;
     const lA = p1.clone().addScaledVector(perp,   dashHalf);
     const rA = p1.clone().addScaledVector(perp,  -dashHalf);
     const lB = p2.clone().addScaledVector(perp2,  dashHalf);
     const rB = p2.clone().addScaledVector(perp2, -dashHalf);
-    dashPos.push(lA.x, Y_LINE, lA.z, rA.x, Y_LINE, rA.z,
-                 lB.x, Y_LINE, lB.z, rB.x, Y_LINE, rB.z);
+    dashPos.push(lA.x, y1, lA.z, rA.x, y1, rA.z,
+                 lB.x, y2, lB.z, rB.x, y2, rB.z);
     dashIdx.push(v, v+2, v+1, v+1, v+2, v+3);
     v += 4;
   }
@@ -1009,13 +1665,13 @@ function buildChunkMeshes(startIdx, endIdx) {
     postMesh.castShadow = true;
     const dummy = new THREE.Object3D();
     let pi = 0;
-    for (let i = startIdx; i < endIdx; i += postStep) {
+    for (let i = startIdx; i < meshEndIdx; i += postStep) {
       const { p: perp } = tanPerpAt(i);
       const c = ROAD_POINTS[i];
       for (const s of [-1, 1]) {
         const px = c.x + perp.x * s * (ROAD_HALF + 0.6);
         const pz = c.z + perp.z * s * (ROAD_HALF + 0.6);
-        dummy.position.set(px, 0.55, pz);
+        dummy.position.set(px, c.y + 0.55, pz);
         dummy.updateMatrix();
         if (pi < postCount) postMesh.setMatrixAt(pi++, dummy.matrix);
       }
@@ -1036,6 +1692,43 @@ function buildChunkMeshes(startIdx, endIdx) {
   const branchGeo    = new THREE.CylinderGeometry(0.08, 0.12, 1.2, 5);
   const rockMat = new THREE.MeshLambertMaterial({ color: 0x6b4030 });
   const rockGeo = new THREE.DodecahedronGeometry(0.6, 0);
+
+  // Forest tree materials & geometries — pine-style with dark green canopy
+  const forestTrunkMat = new THREE.MeshLambertMaterial({ color: 0x3a2818 });
+  const forestCanopyMat = new THREE.MeshLambertMaterial({ color: 0x2a4020 });
+  const forestCanopyDarkMat = new THREE.MeshLambertMaterial({ color: 0x1e3018 });
+  const forestTrunkGeo = new THREE.CylinderGeometry(0.20, 0.35, 1.8, 6);
+  const forestCanopyGeo1 = new THREE.ConeGeometry(1.6, 3.2, 6);
+  const forestCanopyGeo2 = new THREE.ConeGeometry(1.2, 2.4, 6);
+  function makeForestTree() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(forestTrunkGeo, forestTrunkMat);
+    trunk.position.y = 0.9; trunk.castShadow = true;
+    g.add(trunk);
+    // Two layers of canopy for fuller look
+    const canopy1 = new THREE.Mesh(forestCanopyGeo1, forestCanopyMat);
+    canopy1.position.y = 2.4 + Math.random() * 0.4;
+    canopy1.castShadow = true;
+    g.add(canopy1);
+    if (Math.random() < 0.6) {
+      const canopy2 = new THREE.Mesh(forestCanopyGeo2, forestCanopyDarkMat);
+      canopy2.position.y = 3.6 + Math.random() * 0.3;
+      g.add(canopy2);
+    }
+    // Random tree size variation
+    const s = 0.85 + Math.random() * 0.6;
+    g.scale.set(s, s, s);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  }
+  // Bush — small ground vegetation
+  const bushGeo = new THREE.IcosahedronGeometry(0.5, 0);
+  function makeBush() {
+    const b = new THREE.Mesh(bushGeo, forestCanopyMat);
+    b.position.y = 0.3;
+    b.scale.setScalar(0.7 + Math.random() * 1.0);
+    return b;
+  }
 
   function makeCactus() {
     const g = new THREE.Group();
@@ -1127,21 +1820,67 @@ function buildChunkMeshes(startIdx, endIdx) {
   }
 
   // -- DENSE SCATTER (more objects = stronger sense of speed) --
-  // Two passes: a close-in pass with taller objects, a far pass with low ground scatter
-  for (let i = startIdx; i < endIdx; i++) {
+  // Theme-aware: desert places cacti+pillars+trees, forest places pine trees + bushes.
+  const sceneryTheme = (THEMES[CURRENT_MAP?.theme] || THEMES.desert).scenery;
+
+  for (let i = startIdx; i < meshEndIdx; i++) {
+    if (sceneryTheme === 'none') break;
     const c = ROAD_POINTS[i];
     const { p: perp } = tanPerpAt(i);
 
-    // CLOSE BAND: taller objects, right at the road shoulder. Higher hit rate.
-    // Only every 2nd index to avoid total clutter.
+    if (sceneryTheme === 'forest') {
+      // Dense forest scatter — both near and far bands
+      // CLOSE BAND
+      if (i % 1 === 0) {  // every road point
+        for (const side of [-1, 1]) {
+          if (Math.random() > 0.7) continue;  // 70% hit rate per side per point
+          const offDist = 4 + Math.random() * 8;
+          const off = ROAD_HALF + offDist;
+          const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 3;
+          const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 3;
+          const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 12);
+          if (d2 < (ROAD_HALF + 3) * (ROAD_HALF + 3)) continue;
+          const obj = Math.random() < 0.85 ? makeForestTree() : makeBush();
+          obj.position.x = x;
+          obj.position.z = z;
+          // For elevated sections, sit on the embankment slope (interpolate down)
+          if (c.y > 0.4) {
+            const extension = 18 * Math.min(1, c.y / 3);
+            const slopeT = Math.min(1, offDist / extension);
+            obj.position.y = c.y * (1 - slopeT);
+          } else {
+            obj.position.y = c.y;
+          }
+          sceneryGroup.add(obj);
+        }
+      }
+      // FAR BAND — sparser, only trees, always at ground level
+      if (i % 2 === 0) {
+        for (const side of [-1, 1]) {
+          if (Math.random() > 0.6) continue;
+          const off = ROAD_HALF + 15 + Math.random() * 25;
+          const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 8;
+          const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 8;
+          const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 16);
+          if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
+          const obj = makeForestTree();
+          obj.position.x = x;
+          obj.position.z = z;
+          obj.position.y = 0; // far-band trees are beyond the embankment, at ground level
+          sceneryGroup.add(obj);
+        }
+      }
+      continue;
+    }
+
+    // === DESERT (default) — cacti + pillars + trees + rocks ===
+    // CLOSE BAND: taller objects, right at the road shoulder.
     if (i % 2 === 0) {
       for (const side of [-1, 1]) {
         if (Math.random() > 0.40) continue;
-        // Pull objects further from road edge to prevent overlaps on tight curves
         const off = ROAD_HALF + 5 + Math.random() * 4;
         const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 2;
         const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 2;
-        // Search wider, reject within 5m of any road point centerline
         const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 12);
         if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
         const roll = Math.random();
@@ -1156,7 +1895,7 @@ function buildChunkMeshes(startIdx, endIdx) {
       }
     }
 
-    // FAR BAND: low ground scatter further out. Less dense, just visual texture.
+    // FAR BAND: low ground scatter further out.
     if (i % 4 === 0) {
       for (const side of [-1, 1]) {
         if (Math.random() > 0.55) continue;
@@ -1215,28 +1954,234 @@ function generateNextChunk() {
   chunks.push({ startIdx, endIdx, meshes, sceneryGroup });
 }
 
-// Initialise: spawn entry straight + a few chunks ahead
-function initRoad() {
-  // Start pen 200m behind spawn so the car has road behind it.
-  // Pre-seed noise sample [0] so the first stretch is essentially straight
-  // (otherwise the road can start mid-curve).
-  noiseA[0] = 0; noiseB[0] = 0;
-  noiseA[1] = 0.1; noiseB[1] = 0.1;
-  roadPen.x = 0; roadPen.z = -200; roadPen.heading = 0; roadPen.distance = 0;
-  // Walk 200m of near-straight entry + ~80m more
-  const entrySteps = Math.ceil(280 / POINT_STEP);
-  for (let i = 0; i < entrySteps; i++) {
-    const p = advancePen();
-    ROAD_POINTS[nextChunkIdx] = p;
-    roadGridAdd(p, nextChunkIdx);
-    nextChunkIdx++;
-  }
-  const { meshes, sceneryGroup } = buildChunkMeshes(0, nextChunkIdx);
-  chunks.push({ startIdx: 0, endIdx: nextChunkIdx, meshes, sceneryGroup });
-
-  for (let i = 0; i < CHUNKS_AHEAD; i++) generateNextChunk();
+// === FIXED-LOOP HELPERS ===
+// Catmull-Rom interpolation between two control points (cp1→cp2),
+// using cp0 and cp3 as the surrounding context to compute smooth curves.
+// t in [0..1].
+// Catmull-Rom in 3D. Control points may be either [x, z] (2D, y=0) or [x, y, z].
+// Returns { x, y, z }.
+function cpGet(p) {
+  // Normalize a control point to (x, y, z)
+  if (p.length === 2) return { x: p[0], y: 0, z: p[1] };
+  return { x: p[0], y: p[1], z: p[2] };
 }
-initRoad();
+
+function catmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const a = cpGet(p0), b = cpGet(p1), c = cpGet(p2), d = cpGet(p3);
+  const x = 0.5 * ((2 * b.x) + (-a.x + c.x) * t +
+    (2*a.x - 5*b.x + 4*c.x - d.x) * t2 +
+    (-a.x + 3*b.x - 3*c.x + d.x) * t3);
+  const y = 0.5 * ((2 * b.y) + (-a.y + c.y) * t +
+    (2*a.y - 5*b.y + 4*c.y - d.y) * t2 +
+    (-a.y + 3*b.y - 3*c.y + d.y) * t3);
+  const z = 0.5 * ((2 * b.z) + (-a.z + c.z) * t +
+    (2*a.z - 5*b.z + 4*c.z - d.z) * t2 +
+    (-a.z + 3*b.z - 3*c.z + d.z) * t3);
+  return { x, y, z };
+}
+
+// Generate a dense list of points along a closed-loop track from
+// control points, sampled at approximately POINT_STEP density.
+function sampleClosedLoop(controlPoints) {
+  const N = controlPoints.length;
+  const result = [];
+  // Use a coarser step for fixed loops — they're large and 8m gives plenty of
+  // smoothness while keeping mesh complexity manageable
+  const step = POINT_STEP * 2;
+  for (let i = 0; i < N; i++) {
+    const p0 = controlPoints[(i - 1 + N) % N];
+    const p1 = controlPoints[i];
+    const p2 = controlPoints[(i + 1) % N];
+    const p3 = controlPoints[(i + 2) % N];
+    const a = cpGet(p1), b = cpGet(p2);
+    const segLen = Math.hypot(b.x - a.x, b.z - a.z);
+    const steps = Math.max(2, Math.ceil(segLen / step));
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      result.push(catmullRom(p0, p1, p2, p3, t));
+    }
+  }
+  return result;
+}
+
+// Build a fixed-loop road from a closed list of points (2D or 3D).
+function buildFixedLoopRoad(controlPoints) {
+  const samples = sampleClosedLoop(controlPoints);
+  // Populate ROAD_POINTS with Vector3 entries — y is the road elevation
+  for (let i = 0; i < samples.length; i++) {
+    const v = new THREE.Vector3(samples[i].x, samples[i].y, samples[i].z);
+    ROAD_POINTS[i] = v;
+    roadGridAdd(v, i);
+    nextChunkIdx = i + 1;
+  }
+  // Build mesh for the entire loop as one chunk (no streaming for fixed loops)
+  const { meshes, sceneryGroup } = buildChunkMeshes(0, nextChunkIdx);
+  chunks.push({ startIdx: 0, endIdx: nextChunkIdx, meshes, sceneryGroup, isFixedLoop: true });
+  // Steep embankment under elevated bridge sections — narrow slope, tucked in
+  buildSteepEmbankment(0, nextChunkIdx);
+  // Add barriers along both edges
+  buildBarriers(0, nextChunkIdx);
+}
+
+// === STEEP EMBANKMENT ===
+// Narrow, steep skirt that supports elevated road sections. 3m wide
+// (vs old 18m) so it barely extends past the barrier and can't overtake
+// neighboring road. Slope is ~40° — a steep grass bank, not a gentle hill.
+function buildSteepEmbankment(startIdx, endIdx) {
+  const SKIRT_WIDTH = 1.5; // very narrow — near-vertical ~60° slope
+  const ELEVATION_THRESHOLD = 0.8;
+  const theme = THEMES[CURRENT_MAP?.theme] || THEMES.desert;
+  const color = theme.groundColor;
+
+  for (const side of [-1, 1]) {
+    const positions = [];
+    const indices = [];
+    let v = 0;
+    let prevIncluded = false;
+    for (let i = startIdx; i < endIdx; i++) {
+      const c = ROAD_POINTS[i];
+      if (!c || c.y < ELEVATION_THRESHOLD) {
+        prevIncluded = false;
+        continue;
+      }
+      const { p: perp } = tanPerpAt(i);
+      if (!perp) { prevIncluded = false; continue; }
+      // Inner vertex: tucked just inside the barrier, at road Y
+      const innerX = c.x + perp.x * side * (ROAD_HALF + 0.6);
+      const innerZ = c.z + perp.z * side * (ROAD_HALF + 0.6);
+      const innerY = c.y - 0.1;
+      // Outer vertex: SKIRT_WIDTH out, at ground level — steep slope
+      const outerX = c.x + perp.x * side * (ROAD_HALF + 0.6 + SKIRT_WIDTH);
+      const outerZ = c.z + perp.z * side * (ROAD_HALF + 0.6 + SKIRT_WIDTH);
+      positions.push(innerX, innerY, innerZ);
+      positions.push(outerX, 0, outerZ);
+      if (prevIncluded) {
+        if (side === 1) {
+          indices.push(v - 2, v - 1, v + 1);
+          indices.push(v - 2, v + 1, v);
+        } else {
+          indices.push(v - 2, v + 1, v - 1);
+          indices.push(v - 2, v, v + 1);
+        }
+      }
+      v += 2;
+      prevIncluded = true;
+    }
+    if (positions.length < 4) continue;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshLambertMaterial({ color, side: THREE.FrontSide });
+    scene.add(new THREE.Mesh(geo, mat));
+  }
+}
+
+// === BARRIERS ===
+// For fixed-loop maps, build barrier walls along both road edges.
+// Used both visually and by the soft-bounce physics.
+const BARRIERS = {
+  // Each barrier point: { x, z, perpX, perpZ } — perpendicular outward direction.
+  // Indexed parallel to ROAD_POINTS so lookups by road index are direct.
+  points: [],
+  enabled: false,
+};
+const BARRIER_OFFSET = ROAD_HALF + 0.5; // 0.5m past road edge
+const BARRIER_HEIGHT = 0.20; // bare kerb — minimal visual footprint
+
+function buildBarriers(startIdx, endIdx) {
+  BARRIERS.enabled = true;
+  BARRIERS.points = [];
+  const group = new THREE.Group();
+  // tanPerpAt handles the seam zone safely, so we build across the full range
+  const barrierEndIdx = endIdx;
+  // Two strip meshes, one per side. Use BufferGeometry quads.
+  for (const side of [-1, 1]) {
+    const positions = [];
+    const indices = [];
+    let v = 0;
+    for (let i = startIdx; i < barrierEndIdx; i++) {
+      const c = ROAD_POINTS[i];
+      const { p: perp } = tanPerpAt(i);
+      if (!perp) continue;
+      const px = c.x + perp.x * side * BARRIER_OFFSET;
+      const pz = c.z + perp.z * side * BARRIER_OFFSET;
+      // Save barrier point data for physics (full range, so physics still works at closure)
+      if (side === 1) {
+        BARRIERS.points[i] = BARRIERS.points[i] || {};
+        BARRIERS.points[i].rightX = px;
+        BARRIERS.points[i].rightZ = pz;
+      } else {
+        BARRIERS.points[i] = BARRIERS.points[i] || {};
+        BARRIERS.points[i].leftX = px;
+        BARRIERS.points[i].leftZ = pz;
+      }
+      // Two vertices per slice — bottom and top of the wall, at road elevation
+      positions.push(px, c.y, pz);
+      positions.push(px, c.y + BARRIER_HEIGHT, pz);
+      if (i > startIdx) {
+        // Two triangles forming a quad with the previous slice
+        indices.push(v - 2, v - 1, v + 1);
+        indices.push(v - 2, v + 1, v);
+      }
+      v += 2;
+    }
+    // NOTE: no wrap-close — connecting last to first across the closure
+    // creates a long twisted quad that spans the start area.
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshLambertMaterial({
+      color: side === 1 ? 0x6a3028 : 0x8a8278,
+      side: THREE.DoubleSide
+    });
+    const mesh = new THREE.Mesh(geo, mat);
+    group.add(mesh);
+  }
+  scene.add(group);
+}
+
+// Initialise the road based on the chosen map. Called by startGame() after
+// map selection. Cleans up any prior state if called more than once.
+function initRoad() {
+  // Reset state
+  ROAD_POINTS.length = 0;
+  ROAD_GRID.clear();
+  nextChunkIdx = 0;
+  chunks.length = 0;
+  carRoadIdx = 0;
+  BARRIERS.points = [];
+  BARRIERS.enabled = false;
+  // Apply per-map road width — Nordschleife is narrow (11m), desert is wide (22m)
+  ROAD_WIDTH = CURRENT_MAP.roadWidth || 22;
+  ROAD_HALF = ROAD_WIDTH / 2;
+  // Reset hairpin state for procedural modes
+  currentHairpin = null;
+  nextHairpinAt = 600;
+
+  if (CURRENT_MAP.type === 'fixed_loop') {
+    buildFixedLoopRoad(CURRENT_MAP.controlPoints);
+  } else {
+    // procedural_infinite or procedural_straight: use the pen-walker
+    noiseA[0] = 0; noiseB[0] = 0;
+    noiseA[1] = 0.1; noiseB[1] = 0.1;
+    roadPen.x = 0; roadPen.z = -200; roadPen.heading = 0; roadPen.distance = 0;
+    const entrySteps = Math.ceil(280 / POINT_STEP);
+    for (let i = 0; i < entrySteps; i++) {
+      const p = advancePen();
+      ROAD_POINTS[nextChunkIdx] = p;
+      roadGridAdd(p, nextChunkIdx);
+      nextChunkIdx++;
+    }
+    const { meshes, sceneryGroup } = buildChunkMeshes(0, nextChunkIdx);
+    chunks.push({ startIdx: 0, endIdx: nextChunkIdx, meshes, sceneryGroup });
+    for (let i = 0; i < CHUNKS_AHEAD; i++) generateNextChunk();
+  }
+}
+// Note: initRoad() is now called by startGame() after the player picks a map.
 
 // Tracks the car's monotonic progress along the road. Only ever moves
 // FORWARD (toward higher indices). This prevents the streamer from
@@ -1287,9 +2232,26 @@ function attemptRespawn() {
 
 // Per-frame: ensure chunks ahead of car, dispose chunks far behind
 function streamRoad() {
-  // Find which road index the car is currently nearest to.
-  // BUT: only allow this to advance forward, never jump backward.
-  // We search in a small window AHEAD of the current carRoadIdx.
+  // For fixed-loop tracks: do a global search (loop is small enough)
+  // and allow the index to wrap. Use 3D distance so the car at y=0 below
+  // a bridge doesn't snap to the elevated road point above it.
+  if (CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop') {
+    let bestIdx = -1, bestD2 = Infinity;
+    for (let i = 0; i < nextChunkIdx; i++) {
+      const p = ROAD_POINTS[i];
+      if (!p) continue;
+      const dx = p.x - carState.position.x;
+      const dy = p.y - carState.position.y;
+      const dz = p.z - carState.position.z;
+      // Weight Y heavily so the bridge layer separation matters
+      const d2 = dx*dx + dy*dy*16 + dz*dz;
+      if (d2 < bestD2) { bestD2 = d2; bestIdx = i; }
+    }
+    if (bestIdx >= 0) carRoadIdx = bestIdx;
+    return; // no streaming for fixed loops
+  }
+
+  // Procedural modes: monotonic forward search + chunk generation/disposal
   const SEARCH_AHEAD = 60;  // how many indices ahead to scan
   const SEARCH_BEHIND = 4;  // small tolerance for slight reverse (off-road wiggle)
   const lo = Math.max(0, carRoadIdx - SEARCH_BEHIND);
@@ -1305,14 +2267,13 @@ function streamRoad() {
   }
 
   // If we didn't find anything in the window, fall back to a broader search.
-  // This handles initial spawn and edge cases.
   if (bestIdx < 0) {
     const near = nearestRoadPoint(carState.position.x, carState.position.z, 400);
     if (near.idx < 0) return;
     bestIdx = near.idx;
   }
 
-  // Only advance forward. If we somehow ended up at a lower idx, ignore it.
+  // Only advance forward.
   if (bestIdx > carRoadIdx) carRoadIdx = bestIdx;
 
   const carIdx = carRoadIdx;
@@ -1733,10 +2694,20 @@ addEventListener('keydown', e => {
 });
 addEventListener('keyup', e => { keys[e.code] = false; });
 
+// lapState is declared here so resetCar() can reference it safely.
+// It gets assigned its real value later in the LAP TIMING section.
+let lapState = null;
+
 function resetCar() {
-  carState.position.set(0, 0, 0);
+  // Respect the current map's spawn position and heading
+  if (CURRENT_MAP && CURRENT_MAP.spawn) {
+    carState.position.set(CURRENT_MAP.spawn.x, 0, CURRENT_MAP.spawn.z);
+    carState.heading = CURRENT_MAP.spawn.heading;
+  } else {
+    carState.position.set(0, 0, 0);
+    carState.heading = 0;
+  }
   carState.velocity.set(0, 0, 0);
-  carState.heading = 0;
   carState.steerAngle = 0;
   carState.driftTime = 0;
   carState.steerInput = 0;
@@ -1747,6 +2718,12 @@ function resetCar() {
   carState.driftCommit = 0;
   carState.driftSign = 0;
   carRoadIdx = 0;
+  // Reset lap timer too (so the current lap restarts)
+  if (lapState && lapState.active) {
+    lapState.running = false;
+    lapState.currentLap = 0;
+    lapState.prevIdx = 0;
+  }
 }
 
 // Heading-difference helper (returns -PI..PI)
@@ -1813,26 +2790,29 @@ function updatePhysics(dt) {
   // the angle takes care of itself.
   // ------------------------------------------------------------------
   const speedNow = Math.hypot(fwdVel, latVel);
-  const gripFalloff = THREE.MathUtils.clamp(1.0 - Math.max(0, speedNow - 22) * 0.018, 0.45, 1.0);
+  // Two separate falloff curves — normal driving stays grippy at speed,
+  // drift mode is loose. This is the core fix for "turns 90° without handbrake".
+  const gripFalloffNormal = THREE.MathUtils.clamp(1.0 - Math.max(0, speedNow - 22) * 0.004, 0.85, 1.0);
+  const gripFalloffDrift  = THREE.MathUtils.clamp(1.0 - Math.max(0, speedNow - 22) * 0.018, 0.45, 1.0);
 
-  // 1. Decide if we're in drift mode
-  const handbrakeAtSpeed = handbrake && speedNow > 6;
+  // 1. Decide if we're in drift mode — engages earlier (low speed threshold)
+  const handbrakeAtSpeed = handbrake && speedNow > 3;
   if (handbrakeAtSpeed) {
     // Drift is starting OR continuing. If this is the FIRST frame of a new drift,
-    // give the rear an initial sideways kick so the slide is immediately visible
-    // instead of slowly accumulating from grip loss alone.
+    // give the rear an initial sideways kick so the slide is immediately visible.
     if (carState.driftCommit <= 0 && carState.driftSign === 0) {
       // Pick kick direction: prefer steering input direction; fallback to current latVel
       const kickDir = Math.sign(steerIn) || Math.sign(latVel) || 1;
-      // Kick strength scales with current speed (faster = more dramatic break-loose)
-      const kickStrength = Math.min(8, Math.max(3, fwdVel * 0.18));
+      // Bigger kick at high speed — was capped too low. Now scales smoothly up
+      // through racing speeds for proper break-loose feel at 100km/h+.
+      const kickStrength = Math.min(16, Math.max(4.5, fwdVel * 0.30));
       latVel += kickDir * kickStrength;
     }
     carState.driftCommit = 0.55;
   } else {
     carState.driftCommit = Math.max(0, (carState.driftCommit || 0) - dt);
   }
-  const inDriftMode = carState.driftCommit > 0 && speedNow > 5;
+  const inDriftMode = carState.driftCommit > 0 && speedNow > 2;
 
   // 2. Apply grip — different behavior in/out of drift mode
   if (inDriftMode) {
@@ -1849,7 +2829,7 @@ function updatePhysics(dt) {
     // sustained slide" feel of a real drift.
 
     // Apply handbrake-grade grip (very loose) — let latVel decay slowly
-    const handbrakeGrip = GRIP_HANDBRAKE * gripFalloff;
+    const handbrakeGrip = GRIP_HANDBRAKE * gripFalloffDrift;
     latVel *= Math.exp(-handbrakeGrip * dt);
 
     // Lock the slide direction at drift start (prevents teleport on
@@ -1884,15 +2864,21 @@ function updatePhysics(dt) {
     fwdVel *= Math.exp(-0.25 * dt);
 
   } else {
-    // === NORMAL DRIVING ===
+    // === NORMAL DRIVING — high-speed stable cornering ===
     if (carState.driftSign) {
-      // Smooth transition out of drift
-      const easedGrip = GRIP_NORMAL * gripFalloff * 0.5;
+      // Smooth transition out of drift: half-strength normal grip for one frame
+      const easedGrip = GRIP_NORMAL * gripFalloffNormal * 0.5;
       latVel *= Math.exp(-easedGrip * dt);
       carState.driftSign = 0;
     } else {
-      const grip = GRIP_NORMAL * gripFalloff;
+      const grip = GRIP_NORMAL * gripFalloffNormal;
       latVel *= Math.exp(-grip * dt);
+    }
+    // Safety clamp: in normal mode, lateral velocity can never exceed 40% of
+    // forward speed. Prevents high-speed cornering from escalating into a spin.
+    const maxLatNormal = Math.abs(fwdVel) * 0.40;
+    if (Math.abs(latVel) > maxLatNormal) {
+      latVel = Math.sign(latVel) * maxLatNormal;
     }
   }
 
@@ -1975,10 +2961,11 @@ function updatePhysics(dt) {
                 // Player's steering direction: + steerIn = left, - = right (positive steerIn rotates heading +)
                 const playerSteerDir = Math.sign(steerIn);
                 // If steering matches corner direction (and is non-trivial), assist
+                // Lower threshold + stronger multiplier so assist engages earlier
                 const commitment = (roadCurveDir !== 0 && playerSteerDir === roadCurveDir)
-                  ? Math.min(1, Math.abs(steerIn) * 1.2)
+                  ? Math.min(1, Math.abs(steerIn) * 1.6)
                   : 0;
-                headingK = commitment * 4.5 * onRoadFactor;
+                headingK = commitment * 5.5 * onRoadFactor;
               }
             } else {
               headingK = 2.4 * onRoadFactor;
@@ -2039,6 +3026,63 @@ function updatePhysics(dt) {
   carState.steerAngle += (targetSteer - carState.steerAngle) * Math.min(1, dt * 9);
 
   carState.position.addScaledVector(carState.velocity, dt);
+
+  // -- ROAD ELEVATION FOLLOWING --
+  // For fixed-loop tracks with elevation (bridges), interpolate car Y from
+  // the nearest road point's Y. Smooth so transitions are gentle.
+  if (CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop' && ROAD_POINTS.length) {
+    const roadP = ROAD_POINTS[carRoadIdx];
+    if (roadP) {
+      const targetY = roadP.y;
+      // Smooth approach to target Y at ~8 m/s
+      const dy = targetY - carState.position.y;
+      carState.position.y += dy * Math.min(1, dt * 8);
+    }
+  } else {
+    carState.position.y = 0;
+  }
+
+  // -- BARRIER COLLISION (soft bounce) --
+  // Only active on fixed-loop maps that have barriers built.
+  if (BARRIERS.enabled && ROAD_POINTS.length) {
+    // Find nearest road point (use carRoadIdx as fast hint)
+    const idx = carRoadIdx;
+    const roadP = ROAD_POINTS[idx];
+    const { p: perp } = tanPerpAt(idx);
+    if (roadP && perp) {
+      // Signed lateral offset from centerline (positive = right side)
+      const offX = carState.position.x - roadP.x;
+      const offZ = carState.position.z - roadP.z;
+      const lateralOffset = offX * perp.x + offZ * perp.z;
+      // If car has crossed past the barrier (slightly inside it), push back
+      const limit = ROAD_HALF - 0.3; // 0.3m before barrier face
+      if (Math.abs(lateralOffset) > limit) {
+        const sign = Math.sign(lateralOffset);
+        // Snap position back to the limit
+        const correction = (Math.abs(lateralOffset) - limit) * sign;
+        carState.position.x -= perp.x * correction;
+        carState.position.z -= perp.z * correction;
+        // Decompose velocity into along-road + perpendicular components
+        const vx = carState.velocity.x, vz = carState.velocity.z;
+        const { t: tan } = tanPerpAt(idx);
+        if (tan) {
+          const vAlong = vx * tan.x + vz * tan.z;
+          const vPerp  = vx * perp.x + vz * perp.z;
+          // If perpendicular velocity is going INTO the barrier, reflect with energy loss
+          if (Math.sign(vPerp) === sign) {
+            const newPerp = -vPerp * 0.5;  // 50% bounce — soft, controllable
+            const newVx = vAlong * tan.x + newPerp * perp.x;
+            const newVz = vAlong * tan.z + newPerp * perp.z;
+            carState.velocity.x = newVx;
+            carState.velocity.z = newVz;
+            // Also bleed forward speed slightly — hitting a wall isn't free
+            fwdVel *= 0.85;
+            latVel = newVx * _right.x + newVz * _right.z;
+          }
+        }
+      }
+    }
+  }
 
   // Gear + RPM
   const wheelRpm = (Math.abs(fwdVel) / (2 * Math.PI * WHEEL_RADIUS)) * 60;
@@ -2553,17 +3597,15 @@ function computeViewCam(mode, phys) {
   switch (mode) {
     case 'CHASE': {
       const speedFrac = Math.min(1, phys ? phys.speed / MAX_FORWARD : 0);
-      // Distance pulled back so the car sits at ~80% on-screen size.
-      // Camera tracks closely at any speed via speed-scaled follow.
-      const behind = 5.8 - speedFrac * 1.8;   // 5.8m at rest → 4.0m at top
-      const above  = 2.6 - speedFrac * 0.6;   // 2.6m at rest → 2.0m at top — lower
-      const lookAhead = 1.5 - speedFrac * 0.6;
-      const lookUp   = 1.1 - speedFrac * 0.4;
+      // Distance pulls IN at speed (closer to ground feel) and camera drops lower
+      const behind = 5.8 - speedFrac * 2.2;   // 5.8m at rest → 3.6m at top
+      const above  = 2.6 - speedFrac * 1.1;   // 2.6m at rest → 1.5m at top — much lower
+      const lookAhead = 1.5 + speedFrac * 1.5; // look further ahead at speed
+      const lookUp   = 1.1 - speedFrac * 0.5;
       _tmpPos.set(cp.x - _forward.x * behind, cp.y + above, cp.z - _forward.z * behind);
       _tmpLook.set(cp.x + _forward.x * lookAhead, cp.y + lookUp, cp.z + _forward.z * lookAhead);
-      // FOV widens at speed for stronger speed sensation. Car has been
-      // pulled back enough that this expansion doesn't shrink it past comfort.
-      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 66, fovSpeedAdd: 10 };
+      // FOV expansion is the strongest speed cue — pushed hard for visceral feel
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 64, fovSpeedAdd: 28 };
     }
     case 'HOOD': {
       // Mounted just above the front of the car, looking down the road.
@@ -2700,11 +3742,13 @@ audioHintEl    = document.getElementById('audioHint');
 // Don't show the audio hint — the menu replaces it
 // setTimeout(() => audioHintEl && audioHintEl.classList.add('show'), 900);
 
-// === CAR SELECT MENU ===
+// === CAR + MAP SELECT MENU ===
 const menuEl = document.getElementById('menu');
 const carRowEl = document.getElementById('carRow');
+const mapRowEl = document.getElementById('mapRow');
 const menuStartBtn = document.getElementById('menuStart');
-let menuSelectedIdx = 0;
+let menuSelectedIdx = 0;     // selected car
+let menuSelectedMapIdx = 0;  // selected map
 let gameStarted = false;
 
 function hexToCss(h) {
@@ -2718,7 +3762,6 @@ function buildMenuCards() {
     card.className = 'carCard';
     if (idx === menuSelectedIdx) card.classList.add('selected');
     card.dataset.idx = idx;
-    // Top speed estimate (km/h): maxForward * 3.6
     const topKph = Math.round(car.maxForward * 3.6);
     card.innerHTML = `
       <div class="carSwatch" style="background:${hexToCss(car.color)}"></div>
@@ -2741,18 +3784,60 @@ function buildMenuCards() {
   });
 }
 
-function updateMenuSelection() {
-  const cards = carRowEl.querySelectorAll('.carCard');
-  cards.forEach((c, i) => {
-    c.classList.toggle('selected', i === menuSelectedIdx);
+function buildMapCards() {
+  mapRowEl.innerHTML = '';
+  MAPS.forEach((map, idx) => {
+    const card = document.createElement('div');
+    card.className = 'mapCard';
+    if (idx === menuSelectedMapIdx) card.classList.add('selected');
+    card.dataset.idx = idx;
+    card.innerHTML = `
+      <div class="mapName">${map.name}</div>
+      <div class="mapDesc">${map.description}</div>
+    `;
+    card.addEventListener('click', () => {
+      menuSelectedMapIdx = idx;
+      updateMenuSelection();
+    });
+    card.addEventListener('dblclick', startGame);
+    mapRowEl.appendChild(card);
   });
+}
+
+function updateMenuSelection() {
+  const carCards = carRowEl.querySelectorAll('.carCard');
+  carCards.forEach((c, i) => c.classList.toggle('selected', i === menuSelectedIdx));
+  const mapCards = mapRowEl.querySelectorAll('.mapCard');
+  mapCards.forEach((c, i) => c.classList.toggle('selected', i === menuSelectedMapIdx));
 }
 
 function startGame() {
   if (gameStarted) return;
   gameStarted = true;
-  initAudio(); // user gesture happened, safe to start audio
+  initAudio();
+  // Apply car and map selections
   applyCar(CARS[menuSelectedIdx]);
+  CURRENT_MAP = MAPS[menuSelectedMapIdx];
+  // Apply theme BEFORE building road (so scenery uses correct theme)
+  applyMapTheme(CURRENT_MAP.theme || 'desert');
+  // Build the road for the chosen map
+  initRoad();
+  // Init the minimap for fixed-loop tracks (no-op for procedural)
+  initMinimap();
+  // Init lap timing (fixed-loop only)
+  initLapTiming();
+  // Set car spawn position based on map
+  if (CURRENT_MAP.spawn) {
+    carState.position.set(CURRENT_MAP.spawn.x, 0, CURRENT_MAP.spawn.z);
+    carState.heading = CURRENT_MAP.spawn.heading;
+  } else {
+    carState.position.set(0, 0, 0);
+    carState.heading = 0;
+  }
+  carState.velocity.set(0, 0, 0);
+  carState.driftCommit = 0;
+  carState.driftSign = 0;
+  carRoadIdx = 0;
   menuEl.classList.add('hidden');
 }
 
@@ -2769,6 +3854,14 @@ addEventListener('keydown', e => {
     menuSelectedIdx = (menuSelectedIdx + 1) % CARS.length;
     updateMenuSelection();
     e.preventDefault();
+  } else if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+    menuSelectedMapIdx = (menuSelectedMapIdx - 1 + MAPS.length) % MAPS.length;
+    updateMenuSelection();
+    e.preventDefault();
+  } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+    menuSelectedMapIdx = (menuSelectedMapIdx + 1) % MAPS.length;
+    updateMenuSelection();
+    e.preventDefault();
   } else if (e.code === 'Enter' || e.code === 'Space') {
     startGame();
     e.preventDefault();
@@ -2776,7 +3869,8 @@ addEventListener('keydown', e => {
 });
 
 buildMenuCards();
-// Apply default car so colors/HUD show correctly even before menu confirm
+buildMapCards();
+// Apply default car so HUD shows correctly even before confirm
 applyCar(CARS[0]);
 
 // Position the upshift tick: where on the rev bar does the auto-shift happen?
@@ -2829,6 +3923,230 @@ function updateCarVisual(dt, fwdVel) {
   }
 }
 
+// === MINIMAP ===
+// Top-right overlay showing the entire track and the car's current position.
+// Only active on fixed-loop maps (closed circuits). Procedural maps don't
+// have a meaningful "whole map" view since they stream indefinitely.
+const minimapEl = document.getElementById('minimap');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const minimapLabel = document.getElementById('minimapLabel');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+const minimapState = {
+  active: false,
+  // Track world-space bounds, computed once on map load
+  worldMinX: 0, worldMaxX: 0, worldMinZ: 0, worldMaxZ: 0,
+  scale: 1, offsetX: 0, offsetZ: 0,
+  // Pre-rendered background (the road outline)
+  bgCanvas: null,
+};
+
+function initMinimap() {
+  if (!minimapCtx) return;
+  if (!CURRENT_MAP || CURRENT_MAP.type !== 'fixed_loop') {
+    minimapState.active = false;
+    minimapEl.classList.remove('show');
+    return;
+  }
+  minimapState.active = true;
+  minimapEl.classList.add('show');
+  minimapLabel.textContent = CURRENT_MAP.name.toLowerCase();
+
+  // Compute world-space bounds from ROAD_POINTS
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of ROAD_POINTS) {
+    if (!p) continue;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+  // Pad bounds slightly so the track doesn't touch the minimap edges
+  const padW = (maxX - minX) * 0.08;
+  const padH = (maxZ - minZ) * 0.08;
+  minX -= padW; maxX += padW; minZ -= padH; maxZ += padH;
+  minimapState.worldMinX = minX;
+  minimapState.worldMaxX = maxX;
+  minimapState.worldMinZ = minZ;
+  minimapState.worldMaxZ = maxZ;
+
+  // Compute scale so the track fits within the canvas (square aspect)
+  const W = minimapCanvas.width;
+  const H = minimapCanvas.height;
+  const worldW = maxX - minX;
+  const worldH = maxZ - minZ;
+  const scale = Math.min(W / worldW, H / worldH);
+  minimapState.scale = scale;
+  // Center the track in the canvas
+  minimapState.offsetX = (W - worldW * scale) / 2 - minX * scale;
+  minimapState.offsetZ = (H - worldH * scale) / 2 - minZ * scale;
+
+  // Pre-render the track outline to a backing canvas
+  const bg = document.createElement('canvas');
+  bg.width = W; bg.height = H;
+  const bgCtx = bg.getContext('2d');
+  bgCtx.lineWidth = 5;
+  bgCtx.strokeStyle = 'rgba(255, 220, 190, 0.55)';
+  bgCtx.lineCap = 'round';
+  bgCtx.beginPath();
+  let started = false;
+  for (let i = 0; i < ROAD_POINTS.length; i++) {
+    const p = ROAD_POINTS[i];
+    if (!p) continue;
+    const px = p.x * scale + minimapState.offsetX;
+    const py = p.z * scale + minimapState.offsetZ;
+    if (!started) { bgCtx.moveTo(px, py); started = true; }
+    else bgCtx.lineTo(px, py);
+  }
+  // Close the loop visually
+  if (ROAD_POINTS[0]) {
+    const p0 = ROAD_POINTS[0];
+    bgCtx.lineTo(p0.x * scale + minimapState.offsetX, p0.z * scale + minimapState.offsetZ);
+  }
+  bgCtx.stroke();
+  // Mark the start/finish line as a brighter accent
+  if (ROAD_POINTS[0]) {
+    const p0 = ROAD_POINTS[0];
+    bgCtx.fillStyle = 'rgba(255, 176, 112, 1.0)';
+    bgCtx.beginPath();
+    bgCtx.arc(p0.x * scale + minimapState.offsetX, p0.z * scale + minimapState.offsetZ, 7, 0, Math.PI * 2);
+    bgCtx.fill();
+  }
+  minimapState.bgCanvas = bg;
+}
+
+function updateMinimap() {
+  if (!minimapState.active || !minimapCtx) return;
+  const W = minimapCanvas.width;
+  const H = minimapCanvas.height;
+  // Clear and redraw background
+  minimapCtx.clearRect(0, 0, W, H);
+  if (minimapState.bgCanvas) minimapCtx.drawImage(minimapState.bgCanvas, 0, 0);
+  // Draw the car as a triangle pointing in its heading direction
+  const cx = carState.position.x * minimapState.scale + minimapState.offsetX;
+  const cy = carState.position.z * minimapState.scale + minimapState.offsetZ;
+  minimapCtx.save();
+  minimapCtx.translate(cx, cy);
+  // World heading convention: forward = (sin h, cos h). So heading=0 means
+  // forward is +Z, heading=+π/2 means forward is +X (world right).
+  // Canvas Y is flipped (down is +Y), so ctx.rotate(positive) is CW visually.
+  // To make the triangle point world +X (canvas right) when heading=+π/2,
+  // we need to rotate CCW in canvas — which means rotating by -heading.
+  minimapCtx.rotate(-carState.heading);
+  minimapCtx.shadowColor = 'rgba(255, 176, 112, 0.95)';
+  minimapCtx.shadowBlur = 14;
+  minimapCtx.fillStyle = 'rgba(255, 220, 180, 1)';
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(0, 11);    // tip — forward direction (canvas +Y)
+  minimapCtx.lineTo(7, -9);
+  minimapCtx.lineTo(-7, -9);
+  minimapCtx.closePath();
+  minimapCtx.fill();
+  minimapCtx.restore();
+}
+
+// === LAP TIMING ===
+// For fixed-loop maps: detect start/finish crossings by watching carRoadIdx
+// transition from "near the end of the loop" to "near the start". Track
+// current lap time, last lap time, best lap time. Best lap is persisted
+// per map+car combo in localStorage so it survives reloads.
+lapState = {
+  active: false,
+  running: false,        // started timing after first crossing
+  lapStartTime: 0,       // performance.now() at lap start
+  currentLap: 0,         // seconds since lap start
+  lastLap: null,         // seconds, last completed lap
+  bestLap: null,         // seconds, best ever
+  prevIdx: 0,            // for crossing detection
+  storageKey: '',
+};
+
+const lapTimeEl = document.getElementById('lapTime');
+const lapBestEl = document.getElementById('lapBest');
+const lapLastEl = document.getElementById('lapLast');
+const lapPanelEl = document.getElementById('lapPanel');
+
+function formatLapTime(seconds) {
+  if (seconds == null) return '--:--.---';
+  const m = Math.floor(seconds / 60);
+  const s = seconds - m * 60;
+  return `${m}:${s.toFixed(3).padStart(6, '0')}`;
+}
+
+function initLapTiming() {
+  if (!CURRENT_MAP || CURRENT_MAP.type !== 'fixed_loop') {
+    lapState.active = false;
+    if (lapPanelEl) lapPanelEl.classList.remove('show');
+    return;
+  }
+  lapState.active = true;
+  lapState.running = false;
+  lapState.currentLap = 0;
+  lapState.lastLap = null;
+  lapState.prevIdx = 0;
+  // Per-map+car best lap key
+  const carId = CURRENT_CAR.id || 'unknown';
+  lapState.storageKey = `gh_best_${CURRENT_MAP.id}_${carId}`;
+  try {
+    const stored = localStorage.getItem(lapState.storageKey);
+    lapState.bestLap = stored ? parseFloat(stored) : null;
+    if (isNaN(lapState.bestLap)) lapState.bestLap = null;
+  } catch (e) {
+    lapState.bestLap = null;
+  }
+  if (lapPanelEl) lapPanelEl.classList.add('show');
+  refreshLapHUD();
+}
+
+function refreshLapHUD() {
+  if (!lapTimeEl) return;
+  lapTimeEl.textContent = lapState.running
+    ? formatLapTime(lapState.currentLap)
+    : 'press W to start';
+  if (lapBestEl) lapBestEl.textContent = formatLapTime(lapState.bestLap);
+  if (lapLastEl) lapLastEl.textContent = formatLapTime(lapState.lastLap);
+}
+
+function updateLapTiming(dt) {
+  if (!lapState.active) return;
+  const N = nextChunkIdx;
+  if (N < 20) return;
+  const idx = carRoadIdx;
+  const prev = lapState.prevIdx;
+  // Detect crossing of the start/finish line. WIDER window than before
+  // (50 vs 20) — at race speeds the carRoadIdx can advance many steps per
+  // frame, so a narrow window risked missing crossings.
+  const widerWindow = 50;
+  const crossedFinish = prev > N - widerWindow && idx < widerWindow && idx !== prev;
+  // Start timing on first forward motion near the start
+  const startedMoving = !lapState.running && idx >= 1 && idx < widerWindow && carState.velocity.length() > 1;
+
+  if (crossedFinish && lapState.running && lapState.currentLap > 25) {
+    // Complete lap (minimum 25s to ignore false-positive crossings
+    // from carRoadIdx jitter when player loiters near start/finish)
+    const lap = lapState.currentLap;
+    lapState.lastLap = lap;
+    if (lapState.bestLap == null || lap < lapState.bestLap) {
+      lapState.bestLap = lap;
+      try { localStorage.setItem(lapState.storageKey, String(lap)); } catch (e) {}
+      if (lapPanelEl) {
+        lapPanelEl.classList.add('newBest');
+        setTimeout(() => lapPanelEl.classList.remove('newBest'), 2500);
+      }
+    }
+    lapState.lapStartTime = performance.now();
+    lapState.currentLap = 0;
+  } else if (startedMoving) {
+    lapState.running = true;
+    lapState.lapStartTime = performance.now();
+    lapState.currentLap = 0;
+  } else if (lapState.running) {
+    lapState.currentLap = (performance.now() - lapState.lapStartTime) / 1000;
+  }
+
+  lapState.prevIdx = idx;
+  refreshLapHUD();
+}
+
 function updateHUD(speed, isDrifting) {
   speedHud.textContent = Math.round(speed * 3.6);
   if (isDrifting && carState.driftTime > 0.25) {
@@ -2873,6 +4191,13 @@ function animate(now) {
   const dt = Math.min(0.05, (now - lastTime) / 1000);
   lastTime = now;
 
+  // Before the game starts (menu is up), don't run physics or road logic.
+  // Just render the scene so the canvas isn't blank behind the menu.
+  if (!gameStarted) {
+    composer.render();
+    return;
+  }
+
   const phys = updatePhysics(dt);
   updateCarVisual(dt, phys.fwdVel);
 
@@ -2896,13 +4221,16 @@ function animate(now) {
   updateSmoke(dt);
   updateCamera(dt, phys);
   updateHUD(phys.speed, phys.isDrifting);
+  updateMinimap();
+  updateLapTiming(dt);
   updateAudio(dt, phys);
   streamRoad();
 
   // Respawn-when-lost: if the car is far from the road for a sustained
   // period, gently teleport it back. Brief excursions (wide drifts off
   // the shoulder) are tolerated thanks to the hold timer.
-  {
+  // Disabled on fixed-loop maps — barriers handle keeping the car on track.
+  if (CURRENT_MAP && CURRENT_MAP.type !== 'fixed_loop') {
     const roadP = ROAD_POINTS[carRoadIdx];
     if (roadP) {
       const dx = carState.position.x - roadP.x;
@@ -2928,11 +4256,11 @@ function animate(now) {
   sun.position.set(carState.position.x + sunOffset.x, sunOffset.y, carState.position.z + sunOffset.z);
   sunGlow.position.copy(sun.position).add(new THREE.Vector3(0, 0, 1));
 
-  // Motion blur — boosted during drift, scaled overall for stronger speed perception
+  // Motion blur — very subtle. Just a hint at the screen edges, no smearing.
+  // Speed feel comes from the wide FOV and low chase cam, not from blurring.
   const speedFrac = Math.min(1, phys.speed / MAX_FORWARD);
-  const driftBlurBoost = phys.isDrifting ? 0.6 : 0;
-  // Stronger blur scaling — was 0.85, now 1.2 — makes high speed feel ~1.4× faster
-  const blurTarget = Math.min(1.5, Math.pow(speedFrac, 1.1) * 1.2 + driftBlurBoost);
+  const driftBlurBoost = phys.isDrifting ? 0.25 : 0;
+  const blurTarget = Math.min(0.6, Math.pow(speedFrac, 1.6) * 0.5 + driftBlurBoost);
   const cur = radialBlurPass.uniforms.blurStrength.value;
   radialBlurPass.uniforms.blurStrength.value = cur + (blurTarget - cur) * (1 - Math.exp(-3.5 * dt));
 
