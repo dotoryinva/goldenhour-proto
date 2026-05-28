@@ -1,0 +1,5066 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Golden Hour — Drift Prototype v0.4</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Instrument+Serif:ital@0;1&family=IBM+Plex+Mono:wght@300;400&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --warm: rgba(255, 235, 210, 0.92);
+    --warm-dim: rgba(255, 220, 190, 0.55);
+    --accent: #ffb070;
+  }
+  * { box-sizing: border-box; }
+  html, body {
+    margin: 0; padding: 0; overflow: hidden;
+    background: #1a0d12;
+    font-family: 'IBM Plex Mono', monospace;
+    height: 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+  canvas { display: block; }
+
+  #title {
+    position: fixed; top: 24px; left: 28px;
+    color: var(--warm);
+    font-family: 'Instrument Serif', serif;
+    font-style: italic; font-size: 26px;
+    letter-spacing: 0.5px;
+    pointer-events: none; line-height: 1;
+    text-shadow: 0 2px 24px rgba(0,0,0,0.4);
+  }
+  #title .sub {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-style: normal; font-size: 9.5px;
+    letter-spacing: 3px; opacity: 0.55;
+    margin-top: 6px; text-transform: uppercase;
+  }
+
+  /* Minimap (only visible on fixed-loop tracks) */
+  #minimap {
+    position: fixed;
+    top: 24px; right: 28px;
+    width: 180px; height: 180px;
+    background: rgba(20, 12, 16, 0.45);
+    border: 1px solid rgba(255, 230, 200, 0.18);
+    border-radius: 6px;
+    pointer-events: none;
+    display: none;
+    backdrop-filter: blur(4px);
+  }
+  #minimap.show { display: block; }
+  #minimap canvas {
+    display: block;
+    width: 100%; height: 100%;
+    border-radius: 6px;
+  }
+  #minimapLabel {
+    position: absolute;
+    bottom: -18px; left: 0; right: 0;
+    text-align: center;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+  }
+
+  /* Lap timing panel — below the minimap, only visible on fixed-loop maps */
+  #lapPanel {
+    position: fixed;
+    top: 240px; right: 28px;
+    width: 180px;
+    padding: 12px 14px;
+    background: rgba(20, 12, 16, 0.45);
+    border: 1px solid rgba(255, 230, 200, 0.18);
+    border-radius: 6px;
+    pointer-events: none;
+    display: none;
+    backdrop-filter: blur(4px);
+    transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  }
+  #lapPanel.show { display: block; }
+  #lapPanel.newBest {
+    border-color: rgba(255, 176, 112, 0.8);
+    box-shadow: 0 0 30px rgba(255, 176, 112, 0.4);
+  }
+  .lapRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: baseline;
+    font-family: 'IBM Plex Mono', monospace;
+    margin-bottom: 4px;
+  }
+  .lapRow:last-child { margin-bottom: 0; }
+  .lapLabel {
+    font-size: 9px;
+    letter-spacing: 3px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+  }
+  .lapValue {
+    font-size: 13px;
+    letter-spacing: 0.5px;
+    color: var(--warm);
+    font-variant-numeric: tabular-nums;
+  }
+  .lapValue.dim { opacity: 0.55; }
+  .lapValue.best { color: var(--accent); }
+
+  #hud {
+    position: fixed; bottom: 28px; left: 28px;
+    color: var(--warm);
+    pointer-events: none;
+    text-shadow: 0 2px 16px rgba(0,0,0,0.45);
+  }
+  #hud .row { display: flex; align-items: baseline; gap: 0; }
+  .speed {
+    font-family: 'IBM Plex Mono', monospace;
+    font-weight: 300; font-size: 56px;
+    letter-spacing: -1px; line-height: 1;
+    font-variant-numeric: tabular-nums;
+  }
+  .unit {
+    font-size: 10px; letter-spacing: 3px;
+    opacity: 0.5; margin-left: 8px;
+    text-transform: uppercase;
+  }
+  .gear {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 22px; letter-spacing: 1px;
+    color: var(--accent);
+    margin-left: 22px; opacity: 0.92;
+    font-variant-numeric: tabular-nums;
+  }
+  #rpmTrack {
+    width: 280px; height: 8px;
+    background: rgba(255, 230, 200, 0.10);
+    border-radius: 2px; margin-top: 10px;
+    overflow: visible;
+    position: relative;
+  }
+  #rpmBar {
+    height: 100%; width: 0%;
+    background: linear-gradient(90deg, #ffd5a0, #ffb070);
+    border-radius: 2px;
+    transition: width 0.04s linear, background 0.2s ease;
+    box-shadow: 0 0 12px rgba(255, 176, 112, 0.25);
+  }
+  #upshiftTick {
+    position: absolute;
+    top: -3px;
+    width: 2px;
+    height: 14px;
+    background: rgba(255, 230, 200, 0.55);
+    pointer-events: none;
+    border-radius: 1px;
+  }
+  #rpmTrack .redline {
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 12%;
+    height: 100%;
+    background: rgba(255, 80, 80, 0.18);
+    border-radius: 0 2px 2px 0;
+    pointer-events: none;
+  }
+  #shiftFlash {
+    position: fixed;
+    top: 80px;
+    left: 50%;
+    transform: translateX(-50%) translateY(-20px);
+    color: var(--accent);
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 32px;
+    font-weight: 300;
+    letter-spacing: 6px;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 0 30px rgba(255, 176, 112, 0.7), 0 2px 12px rgba(0,0,0,0.4);
+    transition: opacity 0.28s ease, transform 0.28s ease;
+  }
+  #shiftFlash.up {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+  #shiftFlash.down {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+    color: #ffc380;
+  }
+  .gear.shifting {
+    color: #fff4d0;
+    text-shadow: 0 0 18px rgba(255, 220, 180, 0.9);
+  }
+  #viewMode {
+    margin-top: 10px;
+    font-size: 10px; letter-spacing: 4px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+    transition: color 0.3s ease;
+  }
+  #viewMode.drift { color: var(--accent); }
+
+  #drift {
+    position: fixed; top: 80px; left: 50%;
+    transform: translateX(-50%);
+    color: var(--accent);
+    font-family: 'Instrument Serif', serif;
+    font-style: italic; font-size: 42px;
+    letter-spacing: 4px; opacity: 0;
+    transition: opacity 0.35s ease;
+    pointer-events: none;
+    text-shadow: 0 0 30px rgba(255, 176, 112, 0.55), 0 2px 12px rgba(0,0,0,0.4);
+    text-align: center;
+  }
+  #drift.active { opacity: 1; }
+  #drift .timer {
+    display: block;
+    font-family: 'IBM Plex Mono', monospace;
+    font-style: normal; font-size: 11px;
+    letter-spacing: 4px; opacity: 0.65;
+    margin-top: 8px; color: var(--warm);
+  }
+
+  #controls {
+    position: fixed; bottom: 28px; right: 28px;
+    color: var(--warm-dim);
+    font-size: 10.5px; letter-spacing: 1.2px;
+    line-height: 2; text-align: right;
+    pointer-events: none; text-transform: uppercase;
+  }
+  #controls kbd {
+    font-family: 'IBM Plex Mono', monospace;
+    background: rgba(255, 230, 200, 0.08);
+    border: 1px solid rgba(255, 230, 200, 0.18);
+    padding: 2px 6px; border-radius: 3px;
+    margin-right: 6px; font-size: 10px;
+    color: var(--warm);
+  }
+
+  #vignette {
+    position: fixed; inset: 0;
+    pointer-events: none;
+    background: radial-gradient(ellipse at center, transparent 50%, rgba(40, 15, 25, 0.45) 100%);
+    z-index: 1;
+  }
+
+  #loading {
+    position: fixed; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    background: #1a0d12; color: var(--warm);
+    font-family: 'Instrument Serif', serif;
+    font-style: italic; font-size: 22px;
+    letter-spacing: 1px;
+    transition: opacity 0.6s ease; z-index: 100;
+  }
+  #loading.hidden { opacity: 0; pointer-events: none; }
+
+  #respawnFlash {
+    position: fixed; inset: 0;
+    background: radial-gradient(ellipse at center, rgba(255, 220, 180, 0.35), rgba(40, 15, 25, 0.0) 60%);
+    pointer-events: none;
+    opacity: 0;
+    transition: opacity 0.18s ease;
+    z-index: 50;
+  }
+  #respawnFlash.active { opacity: 1; }
+  #respawnLabel {
+    position: fixed;
+    top: 42%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--warm);
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 26px;
+    letter-spacing: 2px;
+    opacity: 0;
+    pointer-events: none;
+    text-shadow: 0 2px 20px rgba(0,0,0,0.5);
+    transition: opacity 0.18s ease;
+    z-index: 51;
+  }
+  #respawnLabel.active { opacity: 0.9; }
+
+  /* === CAR SELECT MENU === */
+  #menu {
+    position: fixed; inset: 0;
+    background: linear-gradient(to bottom, rgba(26, 13, 18, 0.92), rgba(40, 20, 30, 0.92));
+    backdrop-filter: blur(12px);
+    z-index: 200;
+    display: flex; flex-direction: column;
+    align-items: center; justify-content: center;
+    transition: opacity 0.5s ease;
+  }
+  #menu.hidden { opacity: 0; pointer-events: none; }
+  #menuTitle {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 64px;
+    color: var(--warm);
+    letter-spacing: 1px;
+    margin-bottom: 4px;
+    text-shadow: 0 4px 30px rgba(255, 180, 130, 0.3);
+  }
+  #menuSub {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 10px;
+    letter-spacing: 5px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+    margin-bottom: 56px;
+  }
+  .menuSectionLabel {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 9px;
+    letter-spacing: 5px;
+    color: var(--warm-dim);
+    margin-bottom: 14px;
+    margin-top: 8px;
+  }
+  #carRow {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 24px;
+    max-width: 1100px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  #mapRow {
+    display: flex;
+    gap: 14px;
+    margin-bottom: 30px;
+    max-width: 900px;
+    flex-wrap: wrap;
+    justify-content: center;
+  }
+  .mapCard {
+    width: 200px;
+    background: rgba(255, 230, 200, 0.05);
+    border: 1px solid rgba(255, 230, 200, 0.12);
+    border-radius: 6px;
+    padding: 14px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    color: var(--warm);
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    user-select: none;
+  }
+  .mapCard:hover {
+    background: rgba(255, 230, 200, 0.08);
+    border-color: rgba(255, 230, 200, 0.25);
+    transform: translateY(-2px);
+  }
+  .mapCard.selected {
+    border-color: var(--accent);
+    background: rgba(255, 176, 112, 0.10);
+    box-shadow: 0 0 25px rgba(255, 176, 112, 0.15);
+  }
+  .mapName {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 18px;
+    letter-spacing: 0.5px;
+    margin-bottom: 6px;
+  }
+  .mapDesc {
+    font-size: 10px;
+    letter-spacing: 1px;
+    color: var(--warm-dim);
+    line-height: 1.5;
+  }
+  .carCard {
+    width: 180px;
+    background: rgba(255, 230, 200, 0.05);
+    border: 1px solid rgba(255, 230, 200, 0.12);
+    border-radius: 6px;
+    padding: 18px 16px;
+    cursor: pointer;
+    transition: border-color 0.2s ease, background 0.2s ease, transform 0.2s ease;
+    color: var(--warm);
+    text-align: left;
+    font-family: 'IBM Plex Mono', monospace;
+    user-select: none;
+  }
+  .carCard:hover {
+    background: rgba(255, 230, 200, 0.08);
+    border-color: rgba(255, 230, 200, 0.25);
+    transform: translateY(-3px);
+  }
+  .carCard.selected {
+    border-color: var(--accent);
+    background: rgba(255, 176, 112, 0.10);
+    box-shadow: 0 0 30px rgba(255, 176, 112, 0.15);
+  }
+  .carSwatch {
+    width: 100%;
+    height: 60px;
+    border-radius: 4px;
+    margin-bottom: 14px;
+    position: relative;
+    overflow: hidden;
+  }
+  .carSwatch::after {
+    /* Subtle highlight stripe to fake a paint sheen */
+    content: '';
+    position: absolute;
+    inset: 0;
+    background: linear-gradient(135deg, rgba(255,255,255,0.18) 0%, transparent 40%, transparent 60%, rgba(0,0,0,0.18) 100%);
+  }
+  .carName {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 20px;
+    letter-spacing: 0.5px;
+    line-height: 1.1;
+    margin-bottom: 4px;
+  }
+  .carInspired {
+    font-size: 9px;
+    letter-spacing: 2px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .carTagline {
+    font-size: 10px;
+    letter-spacing: 1.5px;
+    color: var(--accent);
+    text-transform: uppercase;
+    margin-bottom: 12px;
+  }
+  .carStats {
+    font-size: 10px;
+    color: var(--warm-dim);
+    line-height: 1.7;
+  }
+  .carStat { display: flex; justify-content: space-between; }
+  .carStat .val { color: var(--warm); font-variant-numeric: tabular-nums; }
+  #menuStart {
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 11px;
+    letter-spacing: 5px;
+    color: var(--warm);
+    background: transparent;
+    border: 1px solid rgba(255, 230, 200, 0.3);
+    padding: 14px 36px;
+    border-radius: 3px;
+    cursor: pointer;
+    text-transform: uppercase;
+    transition: all 0.2s ease;
+    font-weight: 300;
+  }
+  #menuStart:hover {
+    background: rgba(255, 176, 112, 0.15);
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+  #menuHint {
+    margin-top: 22px;
+    font-size: 10px;
+    letter-spacing: 3px;
+    color: var(--warm-dim);
+    text-transform: uppercase;
+  }
+
+  #audioHint {
+    position: fixed; top: 50%; left: 50%;
+    transform: translate(-50%, -50%);
+    color: var(--warm); opacity: 0;
+    font-family: 'Instrument Serif', serif;
+    font-style: italic; font-size: 18px;
+    letter-spacing: 1px;
+    pointer-events: none;
+    transition: opacity 0.5s ease;
+    text-shadow: 0 2px 16px rgba(0,0,0,0.6);
+  }
+  #audioHint.show { opacity: 0.85; }
+</style>
+</head>
+<body>
+
+<div id="loading">golden hour</div>
+<div id="audioHint">press any key to begin</div>
+
+<div id="menu">
+  <div id="menuTitle">Golden Hour</div>
+  <div id="menuSub">choose your machine and your route</div>
+  <div class="menuSectionLabel">CAR</div>
+  <div id="carRow"></div>
+  <div class="menuSectionLabel">MAP</div>
+  <div id="mapRow"></div>
+  <button id="menuStart">drive</button>
+  <div id="menuHint">← → cars · ↑ ↓ maps · enter to start</div>
+</div>
+
+<div id="title">
+  Golden Hour
+  <span class="sub">drift · prototype v0.4</span>
+</div>
+
+<div id="minimap">
+  <canvas id="minimapCanvas" width="360" height="360"></canvas>
+  <div id="minimapLabel">map</div>
+</div>
+
+<div id="lapPanel">
+  <div class="lapRow"><span class="lapLabel">lap</span><span class="lapValue" id="lapTime">--:--.---</span></div>
+  <div class="lapRow"><span class="lapLabel">last</span><span class="lapValue dim" id="lapLast">--:--.---</span></div>
+  <div class="lapRow"><span class="lapLabel">best</span><span class="lapValue best" id="lapBest">--:--.---</span></div>
+</div>
+
+<div id="hud">
+  <div class="row">
+    <span class="speed" id="speed">0</span><span class="unit">km/h</span>
+    <span class="gear" id="gear">G1</span>
+  </div>
+  <div id="rpmTrack">
+    <div id="rpmBar"></div>
+    <div id="upshiftTick"></div>
+    <div class="redline"></div>
+  </div>
+  <div id="viewMode">chase cam</div>
+</div>
+
+<div id="shiftFlash">▲ UP</div>
+
+<div id="drift">
+  DRIFT
+  <span class="timer" id="combo">0.0s</span>
+</div>
+
+<div id="controls">
+  <div><kbd>W</kbd> / <kbd>↑</kbd> accelerate</div>
+  <div><kbd>S</kbd> / <kbd>↓</kbd> brake / reverse</div>
+  <div><kbd>A</kbd> <kbd>D</kbd> / <kbd>←</kbd> <kbd>→</kbd> steer</div>
+  <div><kbd>SPACE</kbd> handbrake</div>
+  <div><kbd>C</kbd> camera (chase / driver / cinematic / race)</div>
+  <div><kbd>R</kbd> reset</div>
+</div>
+
+<div id="vignette"></div>
+<div id="respawnFlash"></div>
+<div id="respawnLabel">returning to road</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/shaders/CopyShader.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/EffectComposer.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/RenderPass.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/postprocessing/ShaderPass.js"></script>
+
+<script>
+// ====================================================================
+//  GOLDEN HOUR v0.4
+//  + Infinite chunked road (slowroads.io-style)
+//  + Road-snap drift assist (car stays on the road during slides)
+//  + Reworked audio (proper engine, audible drift skid)
+//  + Tunnels removed; mountains remain as distant ring
+// ====================================================================
+
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(68, innerWidth / innerHeight, 0.1, 3000);
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(innerWidth, innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.outputEncoding = THREE.sRGBEncoding;
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+renderer.toneMappingExposure = 1.05;
+document.body.appendChild(renderer.domElement);
+
+// ====================================================================
+//  POST: radial motion blur
+// ====================================================================
+const RadialBlurShader = {
+  uniforms: { tDiffuse: { value: null }, blurStrength: { value: 0.0 } },
+  vertexShader: `
+    varying vec2 vUv;
+    void main(){
+      vUv = uv;
+      gl_Position = projectionMatrix * modelViewMatrix * vec4(position, 1.0);
+    }`,
+  fragmentShader: `
+    uniform sampler2D tDiffuse;
+    uniform float blurStrength;
+    varying vec2 vUv;
+    void main(){
+      vec2 center = vec2(0.5, 0.5);
+      vec2 dir = vUv - center;
+      float dist = length(dir);
+      float strength = blurStrength * smoothstep(0.05, 0.7, dist);
+      vec4 sum = vec4(0.0);
+      float total = 0.0;
+      const int SAMPLES = 12;
+      for (int i = 0; i < SAMPLES; i++) {
+        float t = float(i) / float(SAMPLES - 1) - 0.5;
+        float off = t * strength * 0.10;
+        vec2 uv = vUv - dir * off;
+        float w = 1.0 - abs(t) * 1.2;
+        sum += texture2D(tDiffuse, uv) * w;
+        total += w;
+      }
+      gl_FragColor = sum / total;
+    }`,
+};
+const composer = new THREE.EffectComposer(renderer);
+composer.addPass(new THREE.RenderPass(scene, camera));
+const radialBlurPass = new THREE.ShaderPass(RadialBlurShader);
+composer.addPass(radialBlurPass);
+
+// ====================================================================
+//  THEMES — per-map visual atmosphere
+// ====================================================================
+const THEMES = {
+  desert: {
+    // Warm sunset desert — current default look
+    skyTop: 0x3a1f3f, skyMid: 0xff6a3a, skyHorizon: 0xffc580, skyGround: 0x6a2535,
+    fogColor: 0xff9560, fogDensity: 0.0042,
+    groundColor: 0x9a5a3c,
+    mountainNear: 0x4a1f30, mountainFar: 0x6a2a3a,
+    ambientLight: 0xffb088, ambientIntensity: 0.55,
+    sunLight: 0xffc090, sunIntensity: 1.15,
+    rimLight: 0x6a4488, rimIntensity: 0.35,
+    sunColor: 0xfff0c0, sunGlow: 0xffa860,
+    scenery: 'desert',  // cacti + pillars + trees
+  },
+  forest: {
+    // Late-afternoon forest — cooler, muted greens with a soft golden horizon
+    skyTop: 0x1e2840, skyMid: 0x6a8470, skyHorizon: 0xd0c890, skyGround: 0x1a2a1a,
+    fogColor: 0x809074, fogDensity: 0.0055,
+    groundColor: 0x2a4022,
+    mountainNear: 0x1a2818, mountainFar: 0x2c3826,
+    ambientLight: 0xa8c098, ambientIntensity: 0.60,
+    sunLight: 0xfff2d0, sunIntensity: 1.05,
+    rimLight: 0x5a7050, rimIntensity: 0.35,
+    sunColor: 0xfff8e0, sunGlow: 0xc8b888,
+    scenery: 'forest',
+  },
+};
+
+// ====================================================================
+//  BILLBOARDS — in-world advertising / sponsor slots
+// ====================================================================
+// Each entry: { image: URL to 16:9 ad image (PNG with transparency works best),
+//               bg: hex string background color (shows through transparent pixels
+//                   AND while image loads),
+//               url: optional click-through URL for tracking }
+// Billboards line the Nevada desert highway, classic American-roadside style.
+// Each entry is one of:
+//   { image: 'ads/billboard/foo.png', bg: '#hex' }     — real image ad
+//   { preset: 'interstate', city: 'GOLDENVILLE' }       — procedural Interstate sign
+// To add real ads: drop a 16:9 image in ads/billboard/ and reference it here.
+// Empty/unsold slots use the Interstate preset for thematic placeholder content.
+const BILLBOARD_CONTENT = [
+  { image: 'ads/billboard/goldenville.png',  bg: '#1a3820' },
+  { preset: 'interstate', city: 'GOLDENVILLE' },
+  { image: 'ads/billboard/drivetown.png',    bg: '#1a3820' },
+  { preset: 'interstate', city: 'DRIVETOWN' },
+  { preset: 'interstate', city: 'APEX FALLS' },
+  { preset: 'interstate', city: 'REDLINE' },
+  { preset: 'interstate', city: 'DRIFT CITY' },
+  { preset: 'interstate', city: 'GOLDEN HOUR' },
+];
+
+// Fallback text labels — used while images load or if loading fails.
+// Only consulted for entries that have an `image` field. Same order as
+// BILLBOARD_CONTENT (preset entries ignore this).
+const BILLBOARD_FALLBACK_TEXT = [
+  { text: 'GOLDEN HOUR',  fg: '#2a1810' },
+  null,
+  { text: 'DRIFT MASTER', fg: '#fef5e0' },
+  null,
+  { text: 'NÜRBURGRING',  fg: '#f5e0a8' },
+  null,
+  { text: 'SPONSOR SPOT', fg: '#2a1810' },
+  null,
+];
+
+// Render an Interstate-style green highway sign onto a canvas context.
+// Matches the classic American "shield + arrow + city name" layout.
+function renderInterstateSign(ctx, W, H, city) {
+  // Black outer frame
+  ctx.fillStyle = '#000000';
+  ctx.fillRect(0, 0, W, H);
+  // Green sign body — rounded corners, inset from frame
+  const inset = W * 0.012;
+  const r = W * 0.025;
+  ctx.fillStyle = '#0a5028';
+  roundedRect(ctx, inset, inset, W - 2 * inset, H - 2 * inset, r, true, false);
+  // White inner border
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = W * 0.005;
+  const borderInset = inset + W * 0.018;
+  roundedRect(ctx, borderInset, borderInset, W - 2 * borderInset, H - 2 * borderInset, r * 0.7, false, true);
+
+  // -- Arrow on the left --
+  const arrowCX = W * 0.16;
+  const arrowCY = H * 0.32;
+  const arrowSize = H * 0.20;
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath();
+  ctx.moveTo(arrowCX, arrowCY - arrowSize);          // tip
+  ctx.lineTo(arrowCX + arrowSize * 0.85, arrowCY);   // right peak
+  ctx.lineTo(arrowCX + arrowSize * 0.35, arrowCY);   // right shoulder
+  ctx.lineTo(arrowCX + arrowSize * 0.35, arrowCY + arrowSize * 0.8); // right base
+  ctx.lineTo(arrowCX - arrowSize * 0.35, arrowCY + arrowSize * 0.8); // left base
+  ctx.lineTo(arrowCX - arrowSize * 0.35, arrowCY);   // left shoulder
+  ctx.lineTo(arrowCX - arrowSize * 0.85, arrowCY);   // left peak
+  ctx.closePath();
+  ctx.fill();
+
+  // -- Interstate 10 shield --
+  const shieldCX = W * 0.42;
+  const shieldCY = H * 0.32;
+  const shieldH = H * 0.34;
+  const shieldW = shieldH * 0.92;
+  // Red top portion with "INTERSTATE" text
+  const redH = shieldH * 0.28;
+  ctx.fillStyle = '#c8202a';
+  roundedRect(ctx, shieldCX - shieldW / 2, shieldCY - shieldH / 2,
+              shieldW, redH, redH * 0.25, true, false);
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.round(redH * 0.55)}px sans-serif`;
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('INTERSTATE', shieldCX, shieldCY - shieldH / 2 + redH / 2);
+  // Blue shield body — drawn as a shape that looks like a US Interstate shield
+  const blueTop = shieldCY - shieldH / 2 + redH;
+  const blueH = shieldH - redH;
+  const blueW = shieldW * 0.92;
+  ctx.fillStyle = '#1a4090';
+  ctx.beginPath();
+  // Top edge
+  ctx.moveTo(shieldCX - blueW / 2, blueTop);
+  ctx.lineTo(shieldCX + blueW / 2, blueTop);
+  // Right side curves down
+  ctx.lineTo(shieldCX + blueW / 2, blueTop + blueH * 0.55);
+  // Curve to bottom point
+  ctx.quadraticCurveTo(shieldCX + blueW / 2, blueTop + blueH * 0.9,
+                       shieldCX, blueTop + blueH);
+  ctx.quadraticCurveTo(shieldCX - blueW / 2, blueTop + blueH * 0.9,
+                       shieldCX - blueW / 2, blueTop + blueH * 0.55);
+  ctx.closePath();
+  ctx.fill();
+  // White border around shield
+  ctx.strokeStyle = '#ffffff';
+  ctx.lineWidth = W * 0.004;
+  ctx.stroke();
+  // "10" text
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.round(blueH * 0.6)}px sans-serif`;
+  ctx.fillText('10', shieldCX, blueTop + blueH * 0.55);
+
+  // -- "WEST" text --
+  ctx.fillStyle = '#ffffff';
+  ctx.font = `bold ${Math.round(H * 0.13)}px sans-serif`;
+  ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  ctx.fillText('WEST', W * 0.60, H * 0.32);
+
+  // -- City name (large, bottom-center) --
+  ctx.fillStyle = '#ffffff';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  // Auto-size to fit width
+  let fontSize = Math.round(H * 0.26);
+  ctx.font = `bold ${fontSize}px sans-serif`;
+  while (ctx.measureText(city).width > W * 0.86 && fontSize > 40) {
+    fontSize -= 4;
+    ctx.font = `bold ${fontSize}px sans-serif`;
+  }
+  ctx.fillText(city, W / 2, H * 0.72);
+}
+
+// Helper — rounded rectangle path
+function roundedRect(ctx, x, y, w, h, r, fill, stroke) {
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.lineTo(x + w - r, y);
+  ctx.quadraticCurveTo(x + w, y, x + w, y + r);
+  ctx.lineTo(x + w, y + h - r);
+  ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h);
+  ctx.lineTo(x + r, y + h);
+  ctx.quadraticCurveTo(x, y + h, x, y + h - r);
+  ctx.lineTo(x, y + r);
+  ctx.quadraticCurveTo(x, y, x + r, y);
+  ctx.closePath();
+  if (fill) ctx.fill();
+  if (stroke) ctx.stroke();
+}
+
+// ====================================================================
+//  SKY / SUN / FOG
+// ====================================================================
+scene.fog = new THREE.FogExp2(0xff9560, 0.0042);
+
+const skyMat = new THREE.ShaderMaterial({
+  uniforms: {
+    topColor:     { value: new THREE.Color(0x3a1f3f) },
+    midColor:     { value: new THREE.Color(0xff6a3a) },
+    horizonColor: { value: new THREE.Color(0xffc580) },
+    groundColor:  { value: new THREE.Color(0x6a2535) },
+  },
+  vertexShader: `
+    varying vec3 vWorldPos;
+    void main(){
+      vec4 wp = modelMatrix * vec4(position, 1.0);
+      vWorldPos = wp.xyz;
+      gl_Position = projectionMatrix * viewMatrix * wp;
+    }`,
+  fragmentShader: `
+    uniform vec3 topColor, midColor, horizonColor, groundColor;
+    varying vec3 vWorldPos;
+    void main(){
+      float h = normalize(vWorldPos).y;
+      vec3 col;
+      if (h >= 0.0) {
+        float t = smoothstep(0.0, 0.55, h);
+        vec3 lower = mix(horizonColor, midColor, smoothstep(0.0, 0.18, h));
+        col = mix(lower, topColor, t);
+      } else {
+        col = mix(horizonColor, groundColor, smoothstep(0.0, -0.25, h));
+      }
+      gl_FragColor = vec4(col, 1.0);
+    }`,
+  side: THREE.BackSide, depthWrite: false,
+});
+const skyMesh = new THREE.Mesh(new THREE.SphereGeometry(1500, 32, 16), skyMat);
+scene.add(skyMesh);
+
+const sun = new THREE.Mesh(
+  new THREE.CircleGeometry(55, 48),
+  new THREE.MeshBasicMaterial({ color: 0xfff0c0, transparent: true, opacity: 0.95 })
+);
+sun.position.set(-80, 30, -900);
+scene.add(sun);
+
+const sunGlow = new THREE.Mesh(
+  new THREE.CircleGeometry(140, 48),
+  new THREE.MeshBasicMaterial({ color: 0xffa860, transparent: true, opacity: 0.25,
+    blending: THREE.AdditiveBlending, depthWrite: false })
+);
+sunGlow.position.copy(sun.position).add(new THREE.Vector3(0, 0, 1));
+scene.add(sunGlow);
+
+// ====================================================================
+//  LIGHTING
+// ====================================================================
+const ambientLight = new THREE.AmbientLight(0xffb088, 0.55);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xffc090, 1.15);
+sunLight.position.set(-60, 70, -120);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.set(2048, 2048);
+{
+  const sc = sunLight.shadow.camera;
+  sc.near = 1; sc.far = 240;
+  sc.left = -60; sc.right = 60; sc.top = 60; sc.bottom = -60;
+}
+sunLight.shadow.bias = -0.0005;
+scene.add(sunLight);
+
+const rimLight = new THREE.DirectionalLight(0x6a4488, 0.35);
+rimLight.position.set(80, 30, 100);
+scene.add(rimLight);
+
+// ====================================================================
+//  GROUND (large fixed plane — fine since sky/fog hide the edges)
+// ====================================================================
+const ground = new THREE.Mesh(
+  new THREE.PlaneGeometry(6000, 6000, 1, 1),
+  new THREE.MeshLambertMaterial({ color: 0x9a5a3c })
+);
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+// ====================================================================
+//  DISTANT MOUNTAINS (one-shot ring, road-agnostic — they stay far away)
+// ====================================================================
+function buildDistantMountains(radius, count, heightMul, color) {
+  const g = new THREE.Group();
+  for (let i = 0; i < count; i++) {
+    const angle = (i / count) * Math.PI * 2 + (Math.random() - 0.5) * 0.05;
+    const dist = radius + Math.random() * 200;
+    const h = (50 + Math.random() * 90) * heightMul;
+    const r = 70 + Math.random() * 100;
+    const m = new THREE.Mesh(
+      new THREE.ConeGeometry(r, h, 5 + (i % 3)),
+      new THREE.MeshBasicMaterial({ color })
+    );
+    m.position.set(Math.cos(angle) * dist, h / 2 - 2, Math.sin(angle) * dist);
+    g.add(m);
+  }
+  return g;
+}
+const mtnNear = buildDistantMountains(900, 60, 1.0, 0x4a1f30);
+const mtnFar  = buildDistantMountains(1300, 50, 0.7, 0x6a2a3a);
+scene.add(mtnNear);
+scene.add(mtnFar);
+// We'll re-center these around the car each frame so they always feel "out there"
+
+// Theme-aware references for runtime updates
+function applyMapTheme(themeId) {
+  const t = THEMES[themeId] || THEMES.desert;
+  // Sky shader uniforms
+  skyMat.uniforms.topColor.value.setHex(t.skyTop);
+  skyMat.uniforms.midColor.value.setHex(t.skyMid);
+  skyMat.uniforms.horizonColor.value.setHex(t.skyHorizon);
+  skyMat.uniforms.groundColor.value.setHex(t.skyGround);
+  // Fog
+  scene.fog.color.setHex(t.fogColor);
+  scene.fog.density = t.fogDensity;
+  // Ground
+  ground.material.color.setHex(t.groundColor);
+  // Mountains — recolor each child mesh
+  for (const m of mtnNear.children) m.material.color.setHex(t.mountainNear);
+  for (const m of mtnFar.children)  m.material.color.setHex(t.mountainFar);
+  // Lights
+  ambientLight.color.setHex(t.ambientLight);
+  ambientLight.intensity = t.ambientIntensity;
+  sunLight.color.setHex(t.sunLight);
+  sunLight.intensity = t.sunIntensity;
+  rimLight.color.setHex(t.rimLight);
+  rimLight.intensity = t.rimIntensity;
+  // Sun visuals
+  sun.material.color.setHex(t.sunColor);
+  sunGlow.material.color.setHex(t.sunGlow);
+}
+
+// ====================================================================
+//  INFINITE ROAD — chunked centerline + meshes
+// ====================================================================
+// Strategy: maintain a buffer of centerline points generated by walking
+// an arc/straight event chain forward. Each chunk owns its meshes and
+// scenery, and gets disposed when it's far behind the car.
+
+let ROAD_WIDTH = 22;
+let ROAD_HALF = ROAD_WIDTH / 2;
+const CHUNK_TARGET_LENGTH = 220;  // meters per chunk (roughly)
+const POINT_STEP = 4;             // meters between centerline samples
+const CHUNKS_AHEAD = 8;           // how many chunks to keep generated ahead
+const CHUNKS_BEHIND = 2;          // how many chunks to keep behind
+
+// ====================================================================
+//  MAP CATALOG
+// ====================================================================
+// Three modes:
+//   procedural_infinite — current behavior; endless desert, curves & hairpins
+//   procedural_straight — endless straight road for top-speed testing
+//   fixed_loop          — closed circuit built from control points, with barriers
+//
+// Fixed loops are generated once at load (no streaming). Control points are
+// traced from the reference circuit map and interpolated smoothly via Catmull-Rom.
+// ====================================================================
+
+const MAPS = [
+  {
+    id: 'desert',
+    name: 'Nevada Desert',
+    description: 'Endless procedural · sunset highway',
+    type: 'procedural_infinite',
+    theme: 'desert',
+    roadWidth: 14, // narrower mountain road — corners feel proportionally tighter
+  },
+  {
+    id: 'nurburgring',
+    name: 'Nürburgring',
+    description: 'Real geometry · OSM data · 20.8 km',
+    type: 'fixed_loop',
+    theme: 'forest',
+    roadWidth: 7, // narrowed from 11m — fits the OSM-derived corner radii better
+    // Nürburgring tribute — OSM-derived geometry, scaled to 7.5km for ~2min laps.
+    // 361 points preserving all 144 corners >15° of the original Nordschleife shape.
+    // At this smaller scale corners are tighter (proportionally) so the track is
+    // more challenging — the road stays 11m wide while corner radii shrink ~3x.
+    controlPoints: [
+      [    -0.00, 0.00,      0.00],
+      [    27.78, 0.00,     -0.00],
+      [    55.56, 0.00,     -0.00],
+      [    83.34, 0.00,     -0.00],
+      [   111.12, 0.00,     -0.00],
+      [   138.90, 0.00,     -0.00],
+      [   166.68, 0.00,     -0.00],
+      [   194.46, 0.00,     -0.00],
+      [   222.24, 0.00,     -0.00],
+      [   250.02, 0.00,     -0.00],
+      [   277.80, 0.00,     -0.00],
+      [   305.58, 0.00,     -0.00],
+      [   333.36, 0.00,     -0.00],
+      [   361.14, 0.00,     -0.00],
+      [   389.41, 0.00,      0.54],
+      [   417.67, 0.00,      1.08],
+      [   445.94, 0.00,      1.61],
+      [   474.20, 0.00,      2.15],
+      [   502.46, 0.00,      2.69],
+      [   530.73, 0.00,      3.23],
+      [   558.99, 0.00,      3.77],
+      [   587.26, 0.00,      4.30],
+      [   615.52, 0.00,      4.84],
+      [   643.78, 0.00,      5.38],
+      [   672.05, 0.00,      5.92],
+      [   700.31, 0.00,      6.45],
+      [   725.49, 0.00,     11.41],
+      [   751.54, 0.00,     20.62],
+      [   777.59, 0.00,     29.82],
+      [   803.64, 0.00,     39.03],
+      [   829.69, 0.00,     48.23],
+      [   852.57, 0.00,     61.00],
+      [   875.46, 0.00,     73.76],
+      [   899.88, 0.00,     79.77],
+      [   924.30, 0.00,     85.78],
+      [   948.52, 0.00,    100.87],
+      [   953.57, 0.00,    101.76],
+      [   959.20, 0.00,    100.20],
+      [   975.25, 0.00,     88.78],
+      [  1004.42, 0.00,     88.97],
+      [  1010.37, 0.00,     85.14],
+      [  1023.29, 0.00,     52.21],
+      [  1028.27, 0.00,     29.90],
+      [  1030.83, 0.00,      0.47],
+      [  1036.16, 0.00,     -6.49],
+      [  1050.52, 0.00,     -4.64],
+      [  1069.20, 0.00,      6.23],
+      [  1087.87, 0.00,     17.09],
+      [  1104.32, 0.00,     21.63],
+      [  1121.43, 0.00,     22.14],
+      [  1147.17, 0.00,     19.18],
+      [  1163.16, 0.00,     11.83],
+      [  1171.81, 0.00,      2.24],
+      [  1182.98, 0.00,    -15.85],
+      [  1194.15, 0.00,    -33.94],
+      [  1204.69, 0.00,    -45.95],
+      [  1224.30, 0.00,    -60.60],
+      [  1243.91, 0.00,    -75.24],
+      [  1268.44, 0.00,    -80.76],
+      [  1276.85, 0.00,    -90.50],
+      [  1281.99, 0.00,   -110.69],
+      [  1280.47, 0.00,   -136.28],
+      [  1291.21, 0.00,   -162.30],
+      [  1287.92, 0.00,   -178.45],
+      [  1288.52, 0.00,   -187.00],
+      [  1292.71, 0.00,   -193.01],
+      [  1310.73, 0.00,   -208.38],
+      [  1328.76, 0.00,   -223.76],
+      [  1335.04, 0.00,   -233.70],
+      [  1335.47, 0.00,   -241.69],
+      [  1326.88, 0.00,   -261.45],
+      [  1326.59, 0.00,   -271.37],
+      [  1336.78, 0.00,   -295.04],
+      [  1346.97, 0.00,   -318.70],
+      [  1357.16, 0.00,   -342.37],
+      [  1367.35, 0.00,   -366.03],
+      [  1377.54, 0.00,   -389.70],
+      [  1381.09, 0.00,   -413.50],
+      [  1384.65, 0.00,   -437.30],
+      [  1388.20, 0.00,   -461.10],
+      [  1391.75, 0.00,   -484.90],
+      [  1395.31, 0.00,   -508.70],
+      [  1392.72, 0.00,   -525.48],
+      [  1376.87, 0.00,   -556.23],
+      [  1361.20, 0.00,   -568.61],
+      [  1345.52, 0.00,   -581.00],
+      [  1329.85, 0.00,   -593.38],
+      [  1315.49, 0.00,   -611.26],
+      [  1301.14, 0.00,   -629.13],
+      [  1286.79, 0.00,   -647.01],
+      [  1274.94, 0.00,   -670.82],
+      [  1263.10, 0.00,   -694.62],
+      [  1256.15, 0.00,   -714.79],
+      [  1249.19, 0.00,   -734.95],
+      [  1245.18, 0.00,   -762.95],
+      [  1241.16, 0.00,   -790.95],
+      [  1237.15, 0.00,   -818.95],
+      [  1233.13, 0.00,   -846.95],
+      [  1229.11, 0.00,   -874.95],
+      [  1225.10, 0.00,   -902.94],
+      [  1227.53, 0.00,   -922.99],
+      [  1234.07, 0.00,   -943.69],
+      [  1246.66, 0.00,   -963.77],
+      [  1259.26, 0.00,   -983.84],
+      [  1271.85, 0.00,  -1003.92],
+      [  1272.08, 0.00,  -1015.64],
+      [  1268.04, 0.00,  -1023.41],
+      [  1259.14, 0.00,  -1030.18],
+      [  1248.09, 0.00,  -1031.80],
+      [  1225.71, 0.00,  -1028.38],
+      [  1203.34, 0.00,  -1024.95],
+      [  1180.96, 0.00,  -1021.53],
+      [  1150.68, 0.00,  -1020.28],
+      [  1127.32, 0.00,  -1025.35],
+      [  1094.01, 0.00,  -1027.33],
+      [  1073.62, 0.00,  -1032.65],
+      [  1053.23, 0.00,  -1037.96],
+      [  1032.84, 0.00,  -1043.28],
+      [  1000.35, 0.00,  -1047.88],
+      [   977.87, 0.00,  -1053.87],
+      [   958.76, 0.00,  -1062.36],
+      [   943.19, 0.00,  -1073.78],
+      [   927.62, 0.00,  -1085.20],
+      [   912.06, 0.00,  -1096.62],
+      [   901.41, 0.00,  -1114.41],
+      [   890.77, 0.00,  -1132.21],
+      [   883.55, 0.00,  -1139.42],
+      [   872.52, 0.00,  -1144.24],
+      [   851.82, 0.00,  -1145.75],
+      [   841.17, 0.00,  -1152.26],
+      [   836.53, 0.00,  -1159.27],
+      [   837.46, 0.00,  -1178.36],
+      [   830.77, 0.00,  -1186.45],
+      [   807.06, 0.00,  -1192.51],
+      [   779.18, 0.00,  -1195.85],
+      [   751.30, 0.00,  -1199.19],
+      [   733.72, 0.00,  -1204.84],
+      [   716.14, 0.00,  -1210.49],
+      [   693.32, 0.00,  -1215.78],
+      [   670.50, 0.00,  -1221.07],
+      [   647.68, 0.00,  -1226.36],
+      [   628.39, 0.00,  -1234.79],
+      [   609.10, 0.00,  -1243.22],
+      [   598.06, 0.00,  -1252.00],
+      [   590.64, 0.00,  -1262.81],
+      [   583.79, 0.00,  -1283.79],
+      [   576.95, 0.00,  -1304.77],
+      [   574.36, 0.00,  -1319.08],
+      [   580.27, 0.00,  -1330.35],
+      [   599.21, 0.00,  -1341.56],
+      [   605.48, 0.00,  -1348.84],
+      [   616.29, 0.00,  -1372.57],
+      [   627.09, 0.00,  -1396.29],
+      [   625.27, 0.00,  -1408.83],
+      [   621.08, 0.00,  -1413.93],
+      [   614.21, 0.00,  -1416.83],
+      [   590.17, 0.00,  -1415.61],
+      [   566.14, 0.00,  -1414.39],
+      [   530.65, 0.00,  -1419.87],
+      [   520.60, 0.00,  -1426.33],
+      [   505.40, 0.00,  -1443.85],
+      [   476.87, 0.00,  -1458.73],
+      [   464.05, 0.00,  -1463.05],
+      [   453.98, 0.00,  -1463.60],
+      [   438.01, 0.00,  -1459.98],
+      [   417.81, 0.00,  -1442.21],
+      [   407.45, 0.00,  -1419.86],
+      [   397.09, 0.00,  -1397.50],
+      [   386.73, 0.00,  -1375.15],
+      [   388.21, 0.00,  -1351.08],
+      [   383.21, 0.00,  -1343.19],
+      [   376.49, 0.00,  -1341.85],
+      [   363.45, 0.00,  -1348.36],
+      [   355.69, 0.00,  -1349.76],
+      [   332.88, 0.00,  -1342.08],
+      [   313.50, 0.00,  -1331.76],
+      [   294.13, 0.00,  -1321.45],
+      [   274.76, 0.00,  -1311.13],
+      [   256.44, 0.00,  -1293.61],
+      [   238.12, 0.00,  -1276.10],
+      [   230.94, 0.00,  -1272.13],
+      [   219.24, 0.00,  -1272.98],
+      [   201.45, 0.00,  -1282.70],
+      [   191.48, 0.00,  -1292.27],
+      [   177.81, 0.00,  -1316.02],
+      [   167.45, 0.00,  -1320.66],
+      [   142.67, 0.00,  -1318.14],
+      [   118.81, 0.00,  -1313.33],
+      [    94.96, 0.00,  -1308.51],
+      [    69.16, 0.00,  -1300.05],
+      [    43.37, 0.00,  -1291.59],
+      [    17.58, 0.00,  -1283.14],
+      [    -8.21, 0.00,  -1274.68],
+      [   -19.71, 0.00,  -1273.98],
+      [   -42.21, 0.00,  -1275.99],
+      [   -64.72, 0.00,  -1278.01],
+      [   -87.22, 0.00,  -1280.02],
+      [  -104.71, 0.00,  -1273.12],
+      [  -109.83, 0.00,  -1265.89],
+      [  -111.12, 0.00,  -1259.66],
+      [  -104.91, 0.00,  -1237.64],
+      [   -93.83, 0.00,  -1221.26],
+      [   -82.76, 0.00,  -1204.87],
+      [   -71.69, 0.00,  -1188.49],
+      [   -61.61, 0.00,  -1169.78],
+      [   -51.54, 0.00,  -1151.06],
+      [   -43.40, 0.00,  -1130.07],
+      [   -40.86, 0.00,  -1112.16],
+      [   -38.31, 0.00,  -1094.26],
+      [   -42.81, 0.00,  -1074.62],
+      [   -47.31, 0.00,  -1054.98],
+      [   -60.57, 0.00,  -1028.71],
+      [   -75.27, 0.00,  -1009.17],
+      [   -89.96, 0.00,   -989.64],
+      [  -104.66, 0.00,   -970.10],
+      [  -124.15, 0.00,   -958.47],
+      [  -143.64, 0.00,   -946.84],
+      [  -163.13, 0.00,   -935.21],
+      [  -185.56, 0.00,   -917.86],
+      [  -207.99, 0.00,   -900.51],
+      [  -230.42, 0.00,   -883.16],
+      [  -244.80, 0.00,   -868.10],
+      [  -259.18, 0.00,   -853.05],
+      [  -273.56, 0.00,   -837.99],
+      [  -286.35, 0.00,   -818.38],
+      [  -296.19, 0.00,   -793.87],
+      [  -306.02, 0.00,   -769.36],
+      [  -320.61, 0.00,   -747.89],
+      [  -335.19, 0.00,   -726.43],
+      [  -342.68, 0.00,   -720.82],
+      [  -361.32, 0.00,   -712.93],
+      [  -379.91, 0.00,   -710.61],
+      [  -415.77, 0.00,   -709.63],
+      [  -438.56, 0.00,   -712.87],
+      [  -460.37, 0.00,   -715.27],
+      [  -482.69, 0.00,   -719.56],
+      [  -495.10, 0.00,   -720.62],
+      [  -517.00, 0.00,   -714.45],
+      [  -540.49, 0.00,   -708.30],
+      [  -565.64, 0.00,   -701.04],
+      [  -598.97, 0.00,   -691.23],
+      [  -607.18, 0.00,   -685.20],
+      [  -610.98, 0.00,   -677.38],
+      [  -610.82, 0.00,   -670.31],
+      [  -603.11, 0.00,   -658.20],
+      [  -595.88, 0.00,   -653.68],
+      [  -573.23, 0.00,   -652.03],
+      [  -546.99, 0.00,   -654.32],
+      [  -501.00, 0.00,   -647.13],
+      [  -476.09, 0.00,   -640.42],
+      [  -453.05, 0.00,   -637.72],
+      [  -447.88, 0.00,   -632.36],
+      [  -445.83, 0.00,   -622.06],
+      [  -448.82, 0.00,   -613.93],
+      [  -456.80, 0.00,   -608.15],
+      [  -464.63, 0.00,   -609.04],
+      [  -481.83, 0.00,   -623.13],
+      [  -525.19, 0.00,   -613.93],
+      [  -563.71, 0.00,   -620.60],
+      [  -584.97, 0.00,   -616.26],
+      [  -606.14, 0.00,   -611.63],
+      [  -624.33, 0.00,   -603.53],
+      [  -642.18, 0.00,   -595.75],
+      [  -661.96, 0.00,   -598.95],
+      [  -680.99, 0.00,   -601.91],
+      [  -695.34, 0.00,   -607.89],
+      [  -717.26, 0.00,   -621.26],
+      [  -719.83, 0.00,   -628.14],
+      [  -725.73, 0.00,   -649.25],
+      [  -732.11, 0.00,   -657.49],
+      [  -749.27, 0.00,   -665.73],
+      [  -768.41, 0.00,   -675.12],
+      [  -784.47, 0.00,   -673.50],
+      [  -792.58, 0.00,   -667.00],
+      [  -807.44, 0.00,   -643.43],
+      [  -828.68, 0.00,   -622.64],
+      [  -850.68, 0.00,   -596.48],
+      [  -854.85, 0.00,   -585.80],
+      [  -856.77, 0.00,   -560.70],
+      [  -860.32, 0.00,   -549.05],
+      [  -870.19, 0.00,   -535.16],
+      [  -885.83, 0.00,   -523.65],
+      [  -891.22, 0.00,   -515.79],
+      [  -895.13, 0.00,   -495.58],
+      [  -899.04, 0.00,   -475.38],
+      [  -900.42, 0.00,   -455.97],
+      [  -897.13, 0.00,   -445.96],
+      [  -890.54, 0.00,   -437.14],
+      [  -874.75, 0.00,   -425.88],
+      [  -858.96, 0.00,   -414.62],
+      [  -843.02, 0.00,   -400.08],
+      [  -839.18, 0.00,   -393.07],
+      [  -838.71, 0.00,   -384.35],
+      [  -844.09, 0.00,   -364.78],
+      [  -850.16, 0.00,   -355.44],
+      [  -868.73, 0.00,   -337.99],
+      [  -872.56, 0.00,   -328.53],
+      [  -871.42, 0.00,   -320.46],
+      [  -860.29, 0.00,   -297.06],
+      [  -849.17, 0.00,   -273.66],
+      [  -843.86, 0.00,   -266.82],
+      [  -832.39, 0.00,   -261.84],
+      [  -822.00, 0.00,   -263.20],
+      [  -802.96, 0.00,   -276.36],
+      [  -783.91, 0.00,   -289.51],
+      [  -764.86, 0.00,   -302.67],
+      [  -754.18, 0.00,   -306.92],
+      [  -745.71, 0.00,   -306.22],
+      [  -722.83, 0.00,   -288.77],
+      [  -702.42, 0.00,   -280.64],
+      [  -682.01, 0.00,   -272.52],
+      [  -655.37, 0.00,   -252.30],
+      [  -648.93, 0.00,   -244.09],
+      [  -637.44, 0.00,   -218.52],
+      [  -622.93, 0.00,   -194.17],
+      [  -608.43, 0.00,   -169.82],
+      [  -600.92, 0.00,   -162.10],
+      [  -583.44, 0.00,   -155.62],
+      [  -569.51, 0.00,   -153.50],
+      [  -551.84, 0.00,   -158.50],
+      [  -534.18, 0.00,   -163.50],
+      [  -518.05, 0.00,   -163.27],
+      [  -490.91, 0.00,   -155.40],
+      [  -463.77, 0.00,   -147.53],
+      [  -442.16, 0.00,   -133.62],
+      [  -420.55, 0.00,   -119.71],
+      [  -403.79, 0.00,   -112.17],
+      [  -382.80, 0.00,   -108.58],
+      [  -360.92, 0.00,   -110.45],
+      [  -325.64, 0.00,   -107.49],
+      [  -302.44, 0.00,   -114.67],
+      [  -279.25, 0.00,   -121.84],
+      [  -258.63, 0.00,   -126.08],
+      [  -238.01, 0.00,   -130.33],
+      [  -217.40, 0.00,   -134.58],
+      [  -189.81, 0.00,   -147.05],
+      [  -178.27, 0.00,   -159.50],
+      [  -170.94, 0.00,   -179.20],
+      [  -163.61, 0.00,   -198.90],
+      [  -151.11, 0.00,   -209.47],
+      [  -137.54, 0.00,   -211.36],
+      [  -112.62, 0.00,   -210.05],
+      [   -87.70, 0.00,   -208.74],
+      [   -76.56, 0.00,   -205.99],
+      [   -70.66, 0.00,   -200.37],
+      [   -68.91, 0.00,   -193.29],
+      [   -72.69, 0.00,   -171.03],
+      [   -77.22, 0.00,   -158.56],
+      [   -91.13, 0.00,   -138.01],
+      [  -109.21, 0.00,   -116.55],
+      [  -127.28, 0.00,    -95.08],
+      [  -130.50, 0.00,    -88.27],
+      [  -131.43, 0.00,    -60.78],
+      [  -124.53, 0.00,    -34.42],
+      [  -118.19, 0.00,    -21.43],
+      [  -109.41, 0.00,    -11.16],
+      [  -100.00, 0.00,     -4.41],
+      [   -67.00, 0.00,     -2.95],
+      [   -34.00, 0.00,     -1.48],
+    ],
+    spawn: { x: 0, z: 0, heading: 1.5708 }, // due east along start straight
+  },
+  {
+    id: 'straight',
+    name: 'Speed Run',
+    description: 'Infinite straight · top speed testing',
+    type: 'procedural_straight',
+    theme: 'desert',
+    roadWidth: 22,
+  },
+];
+
+let CURRENT_MAP = MAPS[0]; // set by menu
+
+// "Pen" state — like a turtle that walks forward emitting points.
+// We now use CONTINUOUS curvature driven by smooth noise, instead of
+// discrete (straight/turn) events. This gives organic flowing curves,
+// and a "return to forward" bias prevents the road from looping back
+// on itself or crossing.
+const roadPen = {
+  x: 0, z: 0, heading: 0,
+  distance: 0,        // total distance walked — used as the noise input
+};
+
+// 1D value noise — smoothed random — gives organically varying curvature.
+// We precompute a long array of random values at fixed spacing, then
+// interpolate smoothly between them. Two octaves layered.
+const NOISE_SPACING_A = 55;    // meters between low-frequency noise samples (big sweepers)
+const NOISE_SPACING_B = 20;    // meters between high-frequency samples (minor wiggle)
+const noiseA = []; // low freq
+const noiseB = []; // high freq
+function getNoiseValue(arr, index) {
+  while (arr.length <= index + 1) arr.push(Math.random() * 2 - 1);
+  return arr[index];
+}
+function smoothNoise(arr, position, spacing) {
+  const idx = Math.floor(position / spacing);
+  const frac = (position / spacing) - idx;
+  const a = getNoiseValue(arr, idx);
+  const b = getNoiseValue(arr, idx + 1);
+  // smoothstep interpolation
+  const t = frac * frac * (3 - 2 * frac);
+  return a * (1 - t) + b * t;
+}
+
+// Curvature target at the pen's current distance, in rad/m.
+// The road's HEADING is soft-clamped to prevent doubling back, but hairpins
+// can push it past the soft band for sharp turns up to ~140°.
+const CURVATURE_MAX     = 0.050;      // 1/0.050 = 20m radius — meaningful base curves
+const HAIRPIN_CURVATURE = 0.080;      // 1/0.080 = 12.5m radius — tight hairpin
+const TIGHT_TURN_CURVATURE = 0.100;   // 1/0.100 = 10m radius — Fairmont-style apex
+const HEADING_CLAMP_RAD = Math.PI / 2;
+const HEADING_SOFT_BAND = Math.PI / 5;
+
+// Hairpin scheduling state — independent of the curvature noise
+let nextHairpinAt = 350;
+let currentHairpin = null;
+
+function targetCurvatureAt(distance, currentHeading) {
+  if (CURRENT_MAP && CURRENT_MAP.type === 'procedural_straight') {
+    return 0;
+  }
+  const a = smoothNoise(noiseA, distance, NOISE_SPACING_A);
+  const b = smoothNoise(noiseB, distance, NOISE_SPACING_B);
+  let c = (a * 0.60 + b * 0.40) * CURVATURE_MAX;
+
+  // -- TIGHT CORNER INJECTION --
+  // All hairpins capped at ~85° turn max so the heading clamp doesn't fire
+  // a sharp restoring curve afterward (which is what creates P-shape loop-backs).
+  // The tightness comes from RADIUS (10-12.5m) requiring hard braking, not from
+  // turn angle.
+  if (!currentHairpin && distance >= nextHairpinAt) {
+    const isTight = Math.random() < 0.45;
+    if (isTight) {
+      // Fairmont-style apex: 10m radius × ~80° = 14m arc
+      currentHairpin = {
+        kind: 'tight',
+        direction: Math.random() < 0.5 ? -1 : 1,
+        remaining: 12 + Math.random() * 4,  // 12-16m at 10m radius = ~70-92° turn
+        peak: TIGHT_TURN_CURVATURE,
+      };
+    } else {
+      // Regular hairpin: 12.5m radius × ~85° = 18m arc
+      currentHairpin = {
+        kind: 'hairpin',
+        direction: Math.random() < 0.5 ? -1 : 1,
+        remaining: 16 + Math.random() * 8,  // 16-24m at 12.5m radius = ~73-110° turn
+        peak: HAIRPIN_CURVATURE * (0.85 + Math.random() * 0.20),
+      };
+    }
+  }
+  if (currentHairpin) {
+    c = currentHairpin.direction * currentHairpin.peak;
+    currentHairpin.remaining -= POINT_STEP;
+    if (currentHairpin.remaining <= 0) {
+      currentHairpin = null;
+      // Dense corner spacing — no long straights
+      nextHairpinAt = distance + 160 + Math.random() * 200;
+    }
+    return c;
+  }
+
+  // -- HEADING CLAMP: prevent the road from crossing itself (forward-only) --
+  let h = currentHeading;
+  while (h >  Math.PI) h -= 2 * Math.PI;
+  while (h < -Math.PI) h += 2 * Math.PI;
+  const limit = HEADING_CLAMP_RAD;
+  const softStart = limit - HEADING_SOFT_BAND;
+  if (Math.abs(h) > softStart) {
+    const t = THREE.MathUtils.clamp((Math.abs(h) - softStart) / HEADING_SOFT_BAND, 0, 1);
+    const restoreC = -Math.sign(h) * CURVATURE_MAX * (0.4 + t * 1.4);
+    c = c * (1 - t) + restoreC * t;
+    if (Math.abs(h) >= limit) c = -Math.sign(h) * CURVATURE_MAX * 1.6;
+  }
+
+  return Math.max(-HAIRPIN_CURVATURE * 1.4, Math.min(HAIRPIN_CURVATURE * 1.4, c));
+}
+
+// Minimum distance the road must keep from any earlier, non-adjacent segment
+// to prevent crossings. Set comfortably larger than the road width (22m) plus
+// the scenery buffer.
+const SELF_AVOID_RADIUS = 45;
+// Within how many indices back to consider points "adjacent" (i.e. not a
+// real crossing risk — just the immediate trailing road behind us).
+const SELF_AVOID_IGNORE_BACK = 80; // 80 points × 4m = 320m of trailing road ignored
+
+// Walk the pen one POINT_STEP forward, applying smooth curvature plus
+// emergency self-avoidance: if the next point would land too close to an
+// earlier, non-adjacent road segment, bend the curvature away.
+function advancePen() {
+  let curvature = targetCurvatureAt(roadPen.distance, roadPen.heading);
+
+  // Lookahead: where will the new point end up?
+  // First, what would the new heading be after this step?
+  let newHeading = roadPen.heading + curvature * POINT_STEP;
+  let newX = roadPen.x + Math.sin(newHeading) * POINT_STEP;
+  let newZ = roadPen.z + Math.cos(newHeading) * POINT_STEP;
+
+  // -- COLLISION AVOIDANCE --
+  // Scan the spatial grid in a neighborhood around (newX, newZ).
+  // If any earlier road point (with index < nextChunkIdx - SELF_AVOID_IGNORE_BACK)
+  // is within SELF_AVOID_RADIUS, we have a conflict.
+  if (ROAD_GRID && nextChunkIdx > SELF_AVOID_IGNORE_BACK) {
+    const cells = Math.ceil(SELF_AVOID_RADIUS / ROAD_GRID_CELL);
+    const gx0 = Math.floor(newX / ROAD_GRID_CELL);
+    const gz0 = Math.floor(newZ / ROAD_GRID_CELL);
+    const recentCutoff = nextChunkIdx - SELF_AVOID_IGNORE_BACK;
+    let bestConflict = null; // { px, pz, idx, d2 }
+    let bestD2 = SELF_AVOID_RADIUS * SELF_AVOID_RADIUS;
+    for (let dz = -cells; dz <= cells; dz++) {
+      for (let dx = -cells; dx <= cells; dx++) {
+        const arr = ROAD_GRID.get(roadGridKey(gx0 + dx, gz0 + dz));
+        if (!arr) continue;
+        for (const p of arr) {
+          if (p.idx >= recentCutoff) continue; // ignore recent trail
+          const ddx = p.x - newX, ddz = p.z - newZ;
+          const d2 = ddx*ddx + ddz*ddz;
+          if (d2 < bestD2) {
+            bestD2 = d2;
+            bestConflict = { px: p.x, pz: p.z, idx: p.idx, d2 };
+          }
+        }
+      }
+    }
+
+    if (bestConflict) {
+      // Determine which way to bend AWAY from the conflict.
+      // Vector from conflict point to (would-be) new position.
+      const awayX = newX - bestConflict.px;
+      const awayZ = newZ - bestConflict.pz;
+      // Cross product (in y) of forward direction × awayDirection tells us
+      // whether we should turn LEFT (positive curvature) or RIGHT (negative).
+      // Forward direction at current heading:
+      const fwdX = Math.sin(roadPen.heading);
+      const fwdZ = Math.cos(roadPen.heading);
+      // 2D cross: fwd × away = fwdX*awayZ - fwdZ*awayX
+      // Positive = away vector is to the LEFT of forward → turn left (positive curvature)
+      const cross = fwdX * awayZ - fwdZ * awayX;
+      const avoidSign = cross > 0 ? 1 : -1;
+
+      // Strength: stronger the closer we are. At touch distance, max curvature.
+      const proximity = 1 - Math.sqrt(bestConflict.d2) / SELF_AVOID_RADIUS; // 0..1
+      const avoidCurvature = avoidSign * HAIRPIN_CURVATURE * 1.3 * Math.max(0.4, proximity);
+
+      // Override the base curvature when avoidance is needed (don't blend —
+      // we need to bend HARD and fast to escape a near miss).
+      curvature = avoidCurvature;
+
+      // Recompute the new heading and position with the override
+      newHeading = roadPen.heading + curvature * POINT_STEP;
+      newX = roadPen.x + Math.sin(newHeading) * POINT_STEP;
+      newZ = roadPen.z + Math.cos(newHeading) * POINT_STEP;
+
+      // Also: cancel any active hairpin event — collision avoidance takes
+      // priority, and a hairpin in the middle of an avoidance might cause
+      // a new conflict.
+      if (currentHairpin) {
+        currentHairpin = null;
+        nextHairpinAt = roadPen.distance + 250 + Math.random() * 250;
+      }
+    }
+  }
+
+  roadPen.heading = newHeading;
+  roadPen.x = newX;
+  roadPen.z = newZ;
+  roadPen.distance += POINT_STEP;
+  return new THREE.Vector3(roadPen.x, 0, roadPen.z);
+}
+
+// Master point buffer. We never delete from the front (so indices stay stable);
+// we just drop references when a chunk is removed. The spatial grid covers active points only.
+const ROAD_POINTS = [];            // all generated centerline points
+const chunks = [];                 // { startIdx, endIdx, meshes:[], sceneryGroup }
+let nextChunkIdx = 0;              // index that the next chunk should start at
+
+// Spatial grid for "where is the road near (x,z)?"
+const ROAD_GRID = new Map();
+const ROAD_GRID_CELL = 25;
+function roadGridKey(gx, gz) { return gx + ',' + gz; }
+function roadGridAdd(p, idx) {
+  const gx = Math.floor(p.x / ROAD_GRID_CELL);
+  const gz = Math.floor(p.z / ROAD_GRID_CELL);
+  const key = roadGridKey(gx, gz);
+  let arr = ROAD_GRID.get(key);
+  if (!arr) { arr = []; ROAD_GRID.set(key, arr); }
+  arr.push({ x: p.x, z: p.z, idx });
+}
+function roadGridRemove(p, idx) {
+  const gx = Math.floor(p.x / ROAD_GRID_CELL);
+  const gz = Math.floor(p.z / ROAD_GRID_CELL);
+  const key = roadGridKey(gx, gz);
+  const arr = ROAD_GRID.get(key);
+  if (!arr) return;
+  const i = arr.findIndex(e => e.idx === idx);
+  if (i >= 0) arr.splice(i, 1);
+  if (arr.length === 0) ROAD_GRID.delete(key);
+}
+function nearestRoadPoint(x, z, searchRadius) {
+  const r = searchRadius || 60;
+  const cells = Math.ceil(r / ROAD_GRID_CELL);
+  const gx0 = Math.floor(x / ROAD_GRID_CELL);
+  const gz0 = Math.floor(z / ROAD_GRID_CELL);
+  let bestD2 = Infinity, bestIdx = -1;
+  for (let dz = -cells; dz <= cells; dz++) {
+    for (let dx = -cells; dx <= cells; dx++) {
+      const arr = ROAD_GRID.get(roadGridKey(gx0 + dx, gz0 + dz));
+      if (!arr) continue;
+      for (const p of arr) {
+        const dxp = p.x - x, dzp = p.z - z;
+        const d2 = dxp*dxp + dzp*dzp;
+        if (d2 < bestD2) { bestD2 = d2; bestIdx = p.idx; }
+      }
+    }
+  }
+  return { d2: bestD2, idx: bestIdx };
+}
+
+// Like nearestRoadPoint, but prefers road points whose tangent aligns with
+// the car's heading direction. Prevents the assist from latching onto the
+// wrong segment when the road folds near itself.
+function nearestRoadPointAligned(x, z, headingX, headingZ, searchRadius) {
+  const r = searchRadius || 60;
+  const cells = Math.ceil(r / ROAD_GRID_CELL);
+  const gx0 = Math.floor(x / ROAD_GRID_CELL);
+  const gz0 = Math.floor(z / ROAD_GRID_CELL);
+  let bestScore = Infinity, bestIdx = -1, bestD2 = Infinity;
+  for (let dz = -cells; dz <= cells; dz++) {
+    for (let dx = -cells; dx <= cells; dx++) {
+      const arr = ROAD_GRID.get(roadGridKey(gx0 + dx, gz0 + dz));
+      if (!arr) continue;
+      for (const p of arr) {
+        const dxp = p.x - x, dzp = p.z - z;
+        const d2 = dxp*dxp + dzp*dzp;
+        if (d2 > r * r) continue;
+        // Compute tangent at this point (cheap version: use neighbors)
+        const prev = ROAD_POINTS[p.idx - 1];
+        const next = ROAD_POINTS[p.idx + 1];
+        let tx, tz;
+        if (prev && next) { tx = next.x - prev.x; tz = next.z - prev.z; }
+        else if (next)    { tx = next.x - p.x;    tz = next.z - p.z;    }
+        else if (prev)    { tx = p.x - prev.x;    tz = p.z - prev.z;    }
+        else              { tx = 0; tz = 1; }
+        const tlen = Math.hypot(tx, tz) || 1;
+        tx /= tlen; tz /= tlen;
+        // Alignment: 1 = same direction, -1 = opposite.
+        // Only penalize points whose tangent goes the WRONG way (align < 0).
+        // Mid-drift, the car heading rotates significantly relative to road
+        // tangent, but we still want to grab the right segment, so we're
+        // forgiving of moderate misalignment.
+        const align = tx * headingX + tz * headingZ; // -1..1
+        const alignPenalty = align < -0.1 ? (-0.1 - align) * 12000 : 0;
+        const score = d2 + alignPenalty;
+        if (score < bestScore) {
+          bestScore = score;
+          bestIdx = p.idx;
+          bestD2 = d2;
+        }
+      }
+    }
+  }
+  return { d2: bestD2, idx: bestIdx };
+}
+
+// Tangent / perpendicular at an index into ROAD_POINTS.
+// For fixed-loop maps, wraps around so index 0 and N-1 have correct neighbors.
+function tanPerpAt(i) {
+  const p = ROAD_POINTS[i];
+  if (!p) return { t: null, p: null };
+  const isLoop = CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop' && nextChunkIdx > 0;
+  let prev, next;
+  if (isLoop) {
+    const N = nextChunkIdx;
+    // Wrap indices around the loop so the closure seam (last point <-> first
+    // point) has a continuous tangent. Without wrapping, the first/last point
+    // fall back to one-sided differencing and the perpendicular juts sideways
+    // across the start/finish straight.
+    prev = ROAD_POINTS[(i - 1 + N) % N];
+    next = ROAD_POINTS[(i + 1) % N];
+  } else {
+    prev = ROAD_POINTS[i - 1];
+    next = ROAD_POINTS[i + 1];
+  }
+  // Build tangent with single allocation using set()
+  const t = new THREE.Vector3();
+  if (prev && next)      t.set(next.x - prev.x, 0, next.z - prev.z);
+  else if (next)         t.set(next.x - p.x,    0, next.z - p.z);
+  else if (prev)         t.set(p.x - prev.x,    0, p.z - prev.z);
+  else                   t.set(0, 0, 1);
+  t.normalize();
+  const perp = new THREE.Vector3(-t.z, 0, t.x);
+  return { t, p: perp };
+}
+
+// Fast variant for hot physics path — writes into provided scratch vectors,
+// no allocation. Use this in the per-frame physics loop.
+function tanPerpAtInto(i, tOut, pOut) {
+  const p = ROAD_POINTS[i];
+  if (!p) { tOut.set(0,0,0); pOut.set(0,0,0); return false; }
+  const isLoop = CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop' && nextChunkIdx > 0;
+  let prev, next;
+  if (isLoop) {
+    const N = nextChunkIdx;
+    prev = ROAD_POINTS[(i - 1 + N) % N];
+    next = ROAD_POINTS[(i + 1) % N];
+  } else {
+    prev = ROAD_POINTS[i - 1];
+    next = ROAD_POINTS[i + 1];
+  }
+  if (prev && next)      tOut.set(next.x - prev.x, 0, next.z - prev.z);
+  else if (next)         tOut.set(next.x - p.x,    0, next.z - p.z);
+  else if (prev)         tOut.set(p.x - prev.x,    0, p.z - prev.z);
+  else                   tOut.set(0, 0, 1);
+  tOut.normalize();
+  pOut.set(-tOut.z, 0, tOut.x);
+  return true;
+}
+
+// ---- Chunk builder ----
+// Builds asphalt ribbon, edge lines, dashed centerline, posts, and scenery
+// for the given index range [startIdx, endIdx).
+function buildChunkMeshes(startIdx, endIdx) {
+  const meshes = [];
+  if (endIdx - startIdx < 2) return { meshes, sceneryGroup: new THREE.Group() };
+
+  const Y_ASPHALT = 0.02;
+  const Y_LINE    = 0.028;
+
+  // With the tanPerpAt seam-zone fix in place, we can build meshes across
+  // the full range. The first/last few indices use one-sided differencing
+  // for their tangent which keeps perpendiculars pointing the right way.
+  const meshEndIdx = endIdx;
+
+  // --- Asphalt ribbon ---
+  const asPos = [], asIdx = [];
+  for (let i = startIdx; i < meshEndIdx; i++) {
+    const { p: perp } = tanPerpAt(i);
+    const c = ROAD_POINTS[i];
+    const yA = c.y + Y_ASPHALT;
+    const L = c.clone().addScaledVector(perp,  ROAD_HALF);
+    const R = c.clone().addScaledVector(perp, -ROAD_HALF);
+    asPos.push(L.x, yA, L.z, R.x, yA, R.z);
+  }
+  const ringCount = meshEndIdx - startIdx;
+  for (let i = 0; i < ringCount - 1; i++) {
+    const a = i * 2, b = i * 2 + 1, c = (i + 1) * 2, d = (i + 1) * 2 + 1;
+    asIdx.push(a, c, b, b, c, d);
+  }
+  // NOTE: No wrap-around quad — connecting ring[N-1] to ring[0] creates a
+  // twisted bowtie polygon at the closure because approach/departure angles differ.
+  const asGeo = new THREE.BufferGeometry();
+  asGeo.setAttribute('position', new THREE.Float32BufferAttribute(asPos, 3));
+  asGeo.setIndex(asIdx);
+  asGeo.computeVertexNormals();
+  const asphalt = new THREE.Mesh(
+    asGeo,
+    new THREE.MeshLambertMaterial({ color: 0x1f1612 })
+  );
+  asphalt.receiveShadow = true;
+  scene.add(asphalt);
+  meshes.push(asphalt);
+
+  // --- Edge lines + colored kerb stripes ---
+  // Two-tone treatment per side: a wide RED kerb just outside the white line,
+  // and the WHITE edge line itself. This makes the road clearly visible at
+  // distance — especially needed since barriers are invisible.
+  function buildEdgeStrip(sideSign, insetFromEdge, width, color) {
+    const pos = [], idx = [];
+    for (let i = startIdx; i < meshEndIdx; i++) {
+      const { p: perp } = tanPerpAt(i);
+      const c = ROAD_POINTS[i];
+      const yL = c.y + Y_LINE;
+      const innerDist = insetFromEdge + width;
+      const outerDist = insetFromEdge;
+      const inner = c.clone().addScaledVector(perp, sideSign * (ROAD_HALF - innerDist));
+      const outer = c.clone().addScaledVector(perp, sideSign * (ROAD_HALF - outerDist));
+      pos.push(inner.x, yL, inner.z, outer.x, yL, outer.z);
+    }
+    for (let i = 0; i < ringCount - 1; i++) {
+      const a = i*2, b = i*2+1, c = (i+1)*2, d = (i+1)*2+1;
+      idx.push(a, c, b, b, c, d);
+    }
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
+    g.setIndex(idx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color }));
+    scene.add(m); meshes.push(m);
+  }
+  // Red Nordschleife kerb stripe — scales with road width so it's proportional
+  const kerbW = Math.max(0.5, ROAD_WIDTH * 0.06);   // ~0.7m on 11m road, ~1.4m on 22m
+  const lineW = Math.max(0.15, ROAD_WIDTH * 0.01);  // ~0.15m on 11m road, ~0.22m on 22m
+  buildEdgeStrip(+1, 0.05, kerbW, 0x8a4a3a);
+  buildEdgeStrip(-1, 0.05, kerbW, 0x8a4a3a);
+  // White edge line — inside the kerb
+  buildEdgeStrip(+1, kerbW + 0.1, lineW, 0xf5e3c0);
+  buildEdgeStrip(-1, kerbW + 0.1, lineW, 0xf5e3c0);
+
+  // --- Dashed centerline ---
+  const dashPos = [], dashIdx = [];
+  const dashHalf = 0.13;
+  const dashOn = 2, dashOff = 2;
+  const cycle = dashOn + dashOff;
+  let v = 0;
+  // Use the global index to keep the dash pattern continuous across chunks
+  for (let i = startIdx; i < meshEndIdx - 1; i++) {
+    if (i % cycle >= dashOn) continue;
+    const { p: perp }  = tanPerpAt(i);
+    const { p: perp2 } = tanPerpAt(i + 1);
+    const p1 = ROAD_POINTS[i], p2 = ROAD_POINTS[i + 1];
+    const y1 = p1.y + Y_LINE;
+    const y2 = p2.y + Y_LINE;
+    const lA = p1.clone().addScaledVector(perp,   dashHalf);
+    const rA = p1.clone().addScaledVector(perp,  -dashHalf);
+    const lB = p2.clone().addScaledVector(perp2,  dashHalf);
+    const rB = p2.clone().addScaledVector(perp2, -dashHalf);
+    dashPos.push(lA.x, y1, lA.z, rA.x, y1, rA.z,
+                 lB.x, y2, lB.z, rB.x, y2, rB.z);
+    dashIdx.push(v, v+2, v+1, v+1, v+2, v+3);
+    v += 4;
+  }
+  if (dashPos.length) {
+    const g = new THREE.BufferGeometry();
+    g.setAttribute('position', new THREE.Float32BufferAttribute(dashPos, 3));
+    g.setIndex(dashIdx);
+    const m = new THREE.Mesh(g, new THREE.MeshBasicMaterial({ color: 0xf0d090 }));
+    scene.add(m); meshes.push(m);
+  }
+
+  // --- Roadside reflector posts (instanced) ---
+  const postStep = 6;
+  const postCount = Math.ceil(ringCount / postStep) * 2 + 2;
+  if (postCount > 0) {
+    const postMesh = new THREE.InstancedMesh(
+      new THREE.CylinderGeometry(0.09, 0.09, 1.1, 6),
+      new THREE.MeshLambertMaterial({ color: 0xffe4b0 }),
+      postCount
+    );
+    postMesh.castShadow = true;
+    const dummy = new THREE.Object3D();
+    let pi = 0;
+    for (let i = startIdx; i < meshEndIdx; i += postStep) {
+      const { p: perp } = tanPerpAt(i);
+      const c = ROAD_POINTS[i];
+      for (const s of [-1, 1]) {
+        const px = c.x + perp.x * s * (ROAD_HALF + 0.6);
+        const pz = c.z + perp.z * s * (ROAD_HALF + 0.6);
+        dummy.position.set(px, c.y + 0.55, pz);
+        dummy.updateMatrix();
+        if (pi < postCount) postMesh.setMatrixAt(pi++, dummy.matrix);
+      }
+    }
+    postMesh.count = pi;
+    postMesh.instanceMatrix.needsUpdate = true;
+    scene.add(postMesh);
+    meshes.push(postMesh);
+  }
+
+  // --- Desert scenery for this chunk ---
+  const sceneryGroup = new THREE.Group();
+  const cactusMat = new THREE.MeshLambertMaterial({ color: 0x3d5a3a });
+  const trunkGeo  = new THREE.CylinderGeometry(0.28, 0.32, 2.6, 8);
+  const armGeo    = new THREE.CylinderGeometry(0.22, 0.22, 1.1, 8);
+  const treeMat = new THREE.MeshLambertMaterial({ color: 0x5a3a26 });
+  const trunkTreeGeo = new THREE.CylinderGeometry(0.18, 0.28, 2.4, 6);
+  const branchGeo    = new THREE.CylinderGeometry(0.08, 0.12, 1.2, 5);
+  const rockMat = new THREE.MeshLambertMaterial({ color: 0x6b4030 });
+  const rockGeo = new THREE.DodecahedronGeometry(0.6, 0);
+
+  // Forest tree materials & geometries — pine-style with dark green canopy
+  const forestTrunkMat = new THREE.MeshLambertMaterial({ color: 0x3a2818 });
+  const forestCanopyMat = new THREE.MeshLambertMaterial({ color: 0x2a4020 });
+  const forestCanopyDarkMat = new THREE.MeshLambertMaterial({ color: 0x1e3018 });
+  const forestTrunkGeo = new THREE.CylinderGeometry(0.20, 0.35, 1.8, 6);
+  const forestCanopyGeo1 = new THREE.ConeGeometry(1.6, 3.2, 6);
+  const forestCanopyGeo2 = new THREE.ConeGeometry(1.2, 2.4, 6);
+  function makeForestTree() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(forestTrunkGeo, forestTrunkMat);
+    trunk.position.y = 0.9; trunk.castShadow = true;
+    g.add(trunk);
+    // Two layers of canopy for fuller look
+    const canopy1 = new THREE.Mesh(forestCanopyGeo1, forestCanopyMat);
+    canopy1.position.y = 2.4 + Math.random() * 0.4;
+    canopy1.castShadow = true;
+    g.add(canopy1);
+    if (Math.random() < 0.6) {
+      const canopy2 = new THREE.Mesh(forestCanopyGeo2, forestCanopyDarkMat);
+      canopy2.position.y = 3.6 + Math.random() * 0.3;
+      g.add(canopy2);
+    }
+    // Random tree size variation
+    const s = 0.85 + Math.random() * 0.6;
+    g.scale.set(s, s, s);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  }
+  // Bush — small ground vegetation
+  const bushGeo = new THREE.IcosahedronGeometry(0.5, 0);
+  function makeBush() {
+    const b = new THREE.Mesh(bushGeo, forestCanopyMat);
+    b.position.y = 0.3;
+    b.scale.setScalar(0.7 + Math.random() * 1.0);
+    return b;
+  }
+
+  function makeCactus() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkGeo, cactusMat);
+    trunk.position.y = 1.3; trunk.castShadow = true;
+    g.add(trunk);
+    const arms = Math.floor(Math.random() * 3);
+    for (let i = 0; i < arms; i++) {
+      const arm = new THREE.Mesh(armGeo, cactusMat);
+      const side = Math.random() < 0.5 ? -1 : 1;
+      arm.position.set(side * 0.4, 1.6 + Math.random() * 0.5, 0);
+      arm.rotation.z = side * (Math.PI / 3);
+      arm.castShadow = true;
+      g.add(arm);
+    }
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  }
+  function makeTree() {
+    const g = new THREE.Group();
+    const trunk = new THREE.Mesh(trunkTreeGeo, treeMat);
+    trunk.position.y = 1.2; trunk.castShadow = true;
+    g.add(trunk);
+    const branches = 2 + Math.floor(Math.random() * 3);
+    for (let i = 0; i < branches; i++) {
+      const br = new THREE.Mesh(branchGeo, treeMat);
+      const ang = Math.random() * Math.PI * 2;
+      br.position.set(Math.cos(ang) * 0.2, 1.8 + Math.random() * 0.6, Math.sin(ang) * 0.2);
+      br.rotation.z = (Math.random() - 0.5) * 1.4;
+      br.rotation.y = ang;
+      g.add(br);
+    }
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  }
+  function makeRock() {
+    const r = new THREE.Mesh(rockGeo, rockMat);
+    r.scale.setScalar(0.6 + Math.random() * 1.4);
+    r.position.y = 0.3;
+    r.rotation.set(Math.random(), Math.random(), Math.random());
+    r.castShadow = true;
+    return r;
+  }
+
+  // Sandstone pillar (tall, close-to-road, drives motion blur perception)
+  const pillarMat = new THREE.MeshLambertMaterial({ color: 0x7a4a32 });
+  function makePillar() {
+    const g = new THREE.Group();
+    // Stacked uneven cylinders for a weathered look
+    const segments = 2 + Math.floor(Math.random() * 3);
+    let y = 0;
+    for (let s = 0; s < segments; s++) {
+      const r1 = 0.7 + Math.random() * 0.5;
+      const r2 = r1 * (0.85 + Math.random() * 0.2);
+      const h = 1.4 + Math.random() * 1.5;
+      const cyl = new THREE.Mesh(
+        new THREE.CylinderGeometry(r2, r1, h, 8),
+        pillarMat
+      );
+      cyl.position.y = y + h / 2;
+      cyl.castShadow = true;
+      g.add(cyl);
+      y += h * 0.92;
+    }
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  }
+
+  // Warning sign / mile marker — close to road, taller than ground scatter
+  const signPoleMat = new THREE.MeshLambertMaterial({ color: 0x6a6a6a });
+  const signBoardMat = new THREE.MeshBasicMaterial({ color: 0xf5d090 });
+  function makeSign() {
+    const g = new THREE.Group();
+    const pole = new THREE.Mesh(
+      new THREE.CylinderGeometry(0.08, 0.08, 2.4, 6),
+      signPoleMat
+    );
+    pole.position.y = 1.2;
+    pole.castShadow = true;
+    g.add(pole);
+    const board = new THREE.Mesh(
+      new THREE.BoxGeometry(0.95, 0.6, 0.04),
+      signBoardMat
+    );
+    board.position.y = 2.0;
+    g.add(board);
+    g.rotation.y = Math.random() * Math.PI * 2;
+    return g;
+  }
+
+  // ----- CLASSIC HIGHWAY BILLBOARD -----
+  // Tall white pole, wide horizontal board with wooden support truss.
+  // Matches the iconic American desert highway billboard look.
+  const billboardPoleMat = new THREE.MeshLambertMaterial({ color: 0xe8e0d0 }); // off-white
+  const billboardTrussMat = new THREE.MeshLambertMaterial({ color: 0x8a6a4a }); // weathered wood
+  function makeBillboard(content, fallback) {
+    const g = new THREE.Group();
+    // Board face — 16:9 aspect for native image fit. 12m × 6.75m.
+    const boardW = 12.0, boardH = 6.75;
+    // Pole — board sits ~5.5m off the ground (bottom of board)
+    const boardBottomY = 5.5;
+    const poleH = boardBottomY;
+    const pole = new THREE.Mesh(
+      new THREE.BoxGeometry(0.55, poleH, 0.55),
+      billboardPoleMat
+    );
+    pole.position.y = poleH / 2;
+    pole.castShadow = true;
+    g.add(pole);
+    // Canvas + texture — 1920×1080 native 16:9
+    const CANVAS_W = 1920, CANVAS_H = 1080;
+    const canvas = document.createElement('canvas');
+    canvas.width = CANVAS_W;
+    canvas.height = CANVAS_H;
+    const ctx = canvas.getContext('2d');
+    const bg = (content && content.bg) || '#f8f4e8';
+
+    // -- INTERSTATE PRESET — render procedural highway sign --
+    if (content && content.preset === 'interstate') {
+      renderInterstateSign(ctx, CANVAS_W, CANVAS_H, content.city || 'GOLDENVILLE');
+    } else {
+      // Initial fallback paint: bg fill + fallback text (if any)
+      ctx.fillStyle = bg;
+      ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+      if (fallback && fallback.text) {
+        ctx.strokeStyle = fallback.fg || '#2a1810';
+        ctx.lineWidth = 14;
+        ctx.strokeRect(28, 28, CANVAS_W - 56, CANVAS_H - 56);
+        ctx.fillStyle = fallback.fg || '#2a1810';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'middle';
+        const words = fallback.text.split(' ');
+        ctx.font = 'bold 240px sans-serif';
+        const lines = [];
+        let cur = '';
+        for (const w of words) {
+          const test = cur ? cur + ' ' + w : w;
+          if (ctx.measureText(test).width > CANVAS_W - 120 && cur) {
+            lines.push(cur);
+            cur = w;
+          } else cur = test;
+        }
+        if (cur) lines.push(cur);
+        const fontSize = lines.length === 1 ? 280 : (lines.length === 2 ? 220 : 160);
+        ctx.font = `bold ${fontSize}px sans-serif`;
+        const lineH = fontSize * 1.1;
+        const startY = CANVAS_H / 2 - (lines.length - 1) * lineH / 2;
+        lines.forEach((ln, i) => ctx.fillText(ln, CANVAS_W / 2, startY + i * lineH));
+      }
+    }
+    const tex = new THREE.CanvasTexture(canvas);
+    tex.minFilter = THREE.LinearFilter;
+    const boardMat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+    const board = new THREE.Mesh(new THREE.PlaneGeometry(boardW, boardH), boardMat);
+    board.position.y = boardBottomY + boardH / 2;
+    g.add(board);
+    // Async load the actual image, swap texture when ready
+    if (content && content.image) {
+      const img = new Image();
+      // Only set crossOrigin for remote URLs — local file:// paths fail if
+      // crossOrigin is set because there's no CORS header to satisfy.
+      if (content.image.startsWith('http://') || content.image.startsWith('https://')) {
+        img.crossOrigin = 'anonymous';
+      }
+      img.onload = () => {
+        ctx.fillStyle = bg;
+        ctx.fillRect(0, 0, CANVAS_W, CANVAS_H);
+        const srcAspect = img.naturalWidth / img.naturalHeight;
+        const dstAspect = CANVAS_W / CANVAS_H;
+        let dx = 0, dy = 0, dw = CANVAS_W, dh = CANVAS_H;
+        if (srcAspect > dstAspect) {
+          dh = CANVAS_W / srcAspect;
+          dy = (CANVAS_H - dh) / 2;
+        } else if (srcAspect < dstAspect) {
+          dw = CANVAS_H * srcAspect;
+          dx = (CANVAS_W - dw) / 2;
+        }
+        ctx.drawImage(img, dx, dy, dw, dh);
+        tex.needsUpdate = true;
+      };
+      img.onerror = () => {
+        console.warn('Billboard image failed to load:', content.image);
+      };
+      img.src = content.image;
+    }
+    // Support truss — sits at the join between pole and board bottom
+    const trussH = 0.5;
+    const truss = new THREE.Mesh(
+      new THREE.BoxGeometry(boardW * 0.95, trussH, 0.4),
+      billboardTrussMat
+    );
+    truss.position.y = boardBottomY + trussH / 2;
+    truss.castShadow = true;
+    g.add(truss);
+    return g;
+  }
+  // Theme-aware: desert places cacti+pillars+trees, forest places pine trees + bushes.
+  const sceneryTheme = (THEMES[CURRENT_MAP?.theme] || THEMES.desert).scenery;
+
+  for (let i = startIdx; i < meshEndIdx; i++) {
+    if (sceneryTheme === 'none') break;
+    const c = ROAD_POINTS[i];
+    const { p: perp } = tanPerpAt(i);
+
+    if (sceneryTheme === 'forest') {
+      // Dense forest scatter — both near and far bands
+      // CLOSE BAND
+      if (i % 1 === 0) {  // every road point
+        for (const side of [-1, 1]) {
+          if (Math.random() > 0.7) continue;  // 70% hit rate per side per point
+          const offDist = 4 + Math.random() * 8;
+          const off = ROAD_HALF + offDist;
+          const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 3;
+          const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 3;
+          const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 12);
+          if (d2 < (ROAD_HALF + 3) * (ROAD_HALF + 3)) continue;
+          const obj = Math.random() < 0.85 ? makeForestTree() : makeBush();
+          obj.position.x = x;
+          obj.position.z = z;
+          // For elevated sections, sit on the embankment slope (interpolate down)
+          if (c.y > 0.4) {
+            const extension = 18 * Math.min(1, c.y / 3);
+            const slopeT = Math.min(1, offDist / extension);
+            obj.position.y = c.y * (1 - slopeT);
+          } else {
+            obj.position.y = c.y;
+          }
+          sceneryGroup.add(obj);
+        }
+      }
+      // FAR BAND — sparser, only trees, always at ground level
+      if (i % 2 === 0) {
+        for (const side of [-1, 1]) {
+          if (Math.random() > 0.6) continue;
+          const off = ROAD_HALF + 15 + Math.random() * 25;
+          const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 8;
+          const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 8;
+          const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 16);
+          if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
+          const obj = makeForestTree();
+          obj.position.x = x;
+          obj.position.z = z;
+          obj.position.y = 0; // far-band trees are beyond the embankment, at ground level
+          sceneryGroup.add(obj);
+        }
+      }
+      continue;
+    }
+
+    // === DESERT (default) — cacti + pillars + trees + rocks + billboards ===
+    // BILLBOARDS — large highway-style ads spaced every ~128m, alternating sides.
+    // These give the desert a road-trip feel and provide ad slot infrastructure.
+    if (i % 32 === 0 && BILLBOARD_CONTENT.length > 0) {
+      const bbIdx = Math.floor(i / 32);
+      const side = bbIdx % 2 === 0 ? -1 : 1;
+      const off = ROAD_HALF + 8;
+      const x = c.x + perp.x * side * off;
+      const z = c.z + perp.z * side * off;
+      const contentIdx = bbIdx % BILLBOARD_CONTENT.length;
+      const content = BILLBOARD_CONTENT[contentIdx];
+      const fallback = BILLBOARD_FALLBACK_TEXT[contentIdx % BILLBOARD_FALLBACK_TEXT.length];
+      const bb = makeBillboard(content, fallback);
+      bb.position.set(x, 0, z);
+      // Perpendicular to road — drivers see them head-on as they approach
+      const { t: tan } = tanPerpAt(i);
+      bb.rotation.y = Math.atan2(-tan.x, -tan.z);
+      sceneryGroup.add(bb);
+    }
+
+    // CLOSE BAND: taller objects, right at the road shoulder.
+    if (i % 2 === 0) {
+      for (const side of [-1, 1]) {
+        if (Math.random() > 0.40) continue;
+        const off = ROAD_HALF + 5 + Math.random() * 4;
+        const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 2;
+        const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 2;
+        const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 12);
+        if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
+        const roll = Math.random();
+        let obj;
+        if (roll < 0.45)      obj = makeCactus();
+        else if (roll < 0.70) obj = makePillar();
+        else if (roll < 0.88) obj = makeTree();
+        else                  obj = makeSign();
+        obj.position.x = x;
+        obj.position.z = z;
+        sceneryGroup.add(obj);
+      }
+    }
+
+    // FAR BAND: low ground scatter further out.
+    if (i % 4 === 0) {
+      for (const side of [-1, 1]) {
+        if (Math.random() > 0.55) continue;
+        const off = ROAD_HALF + 12 + Math.random() * 18;
+        const x = c.x + perp.x * side * off + (Math.random() - 0.5) * 6;
+        const z = c.z + perp.z * side * off + (Math.random() - 0.5) * 6;
+        const { d2 } = nearestRoadPoint(x, z, ROAD_HALF + 14);
+        if (d2 < (ROAD_HALF + 4) * (ROAD_HALF + 4)) continue;
+        const roll = Math.random();
+        let obj;
+        if (roll < 0.45)      obj = makeRock();
+        else if (roll < 0.75) obj = makeCactus();
+        else                  obj = makePillar();
+        obj.position.x = x;
+        obj.position.z = z;
+        sceneryGroup.add(obj);
+      }
+    }
+  }
+  scene.add(sceneryGroup);
+
+  return { meshes, sceneryGroup };
+}
+
+function disposeChunk(chunk) {
+  for (const m of chunk.meshes) {
+    scene.remove(m);
+    m.geometry?.dispose?.();
+  }
+  // Free the road-grid entries for all points EXCEPT the last one, which is
+  // shared with the next chunk (1-vertex overlap eliminates seam gaps).
+  for (let i = chunk.startIdx; i < chunk.endIdx - 1; i++) {
+    const p = ROAD_POINTS[i];
+    if (p) roadGridRemove(p, i);
+    ROAD_POINTS[i] = null;
+  }
+  scene.remove(chunk.sceneryGroup);
+  chunk.sceneryGroup.traverse(o => { o.geometry?.dispose?.(); });
+}
+
+function generateNextChunk() {
+  // Overlap by 1 with the previous chunk to eliminate seam gaps.
+  // The previous chunk's last vertex is at index nextChunkIdx-1; we re-use it
+  // as the FIRST vertex of this new chunk, which means consecutive quads
+  // share an edge and there's no visible gap.
+  const startIdx = Math.max(0, nextChunkIdx - 1);
+  const targetSteps = Math.ceil(CHUNK_TARGET_LENGTH / POINT_STEP);
+  for (let i = 0; i < targetSteps; i++) {
+    const p = advancePen();
+    ROAD_POINTS[nextChunkIdx] = p;
+    roadGridAdd(p, nextChunkIdx);
+    nextChunkIdx++;
+  }
+  const endIdx = nextChunkIdx;
+  const { meshes, sceneryGroup } = buildChunkMeshes(startIdx, endIdx);
+  chunks.push({ startIdx, endIdx, meshes, sceneryGroup });
+}
+
+// === FIXED-LOOP HELPERS ===
+// Catmull-Rom interpolation between two control points (cp1→cp2),
+// using cp0 and cp3 as the surrounding context to compute smooth curves.
+// t in [0..1].
+// Catmull-Rom in 3D. Control points may be either [x, z] (2D, y=0) or [x, y, z].
+// Returns { x, y, z }.
+function cpGet(p) {
+  // Normalize a control point to (x, y, z)
+  if (p.length === 2) return { x: p[0], y: 0, z: p[1] };
+  return { x: p[0], y: p[1], z: p[2] };
+}
+
+function catmullRom(p0, p1, p2, p3, t) {
+  const t2 = t * t;
+  const t3 = t2 * t;
+  const a = cpGet(p0), b = cpGet(p1), c = cpGet(p2), d = cpGet(p3);
+  const x = 0.5 * ((2 * b.x) + (-a.x + c.x) * t +
+    (2*a.x - 5*b.x + 4*c.x - d.x) * t2 +
+    (-a.x + 3*b.x - 3*c.x + d.x) * t3);
+  const y = 0.5 * ((2 * b.y) + (-a.y + c.y) * t +
+    (2*a.y - 5*b.y + 4*c.y - d.y) * t2 +
+    (-a.y + 3*b.y - 3*c.y + d.y) * t3);
+  const z = 0.5 * ((2 * b.z) + (-a.z + c.z) * t +
+    (2*a.z - 5*b.z + 4*c.z - d.z) * t2 +
+    (-a.z + 3*b.z - 3*c.z + d.z) * t3);
+  return { x, y, z };
+}
+
+// Generate a dense list of points along a closed-loop track from
+// control points, sampled at approximately POINT_STEP density.
+function sampleClosedLoop(controlPoints) {
+  const N = controlPoints.length;
+  const result = [];
+  const step = POINT_STEP;
+  for (let i = 0; i < N; i++) {
+    const p0 = controlPoints[(i - 1 + N) % N];
+    const p1 = controlPoints[i];
+    const p2 = controlPoints[(i + 1) % N];
+    const p3 = controlPoints[(i + 2) % N];
+    const a = cpGet(p1), b = cpGet(p2);
+    const segLen = Math.hypot(b.x - a.x, b.z - a.z);
+    const steps = Math.max(2, Math.ceil(segLen / step));
+    for (let s = 0; s < steps; s++) {
+      const t = s / steps;
+      result.push(catmullRom(p0, p1, p2, p3, t));
+    }
+  }
+  return result;
+}
+
+// Build a fixed-loop road from a closed list of points (2D or 3D).
+function buildFixedLoopRoad(controlPoints) {
+  const samples = sampleClosedLoop(controlPoints);
+  for (let i = 0; i < samples.length; i++) {
+    const v = new THREE.Vector3(samples[i].x, samples[i].y, samples[i].z);
+    ROAD_POINTS[i] = v;
+    roadGridAdd(v, i);
+    nextChunkIdx = i + 1;
+  }
+  const { meshes, sceneryGroup } = buildChunkMeshes(0, nextChunkIdx);
+  chunks.push({ startIdx: 0, endIdx: nextChunkIdx, meshes, sceneryGroup, isFixedLoop: true });
+  buildSteepEmbankment(0, nextChunkIdx);
+  buildBarriers(0, nextChunkIdx);
+}
+
+// === STEEP EMBANKMENT ===
+// Narrow, steep skirt that supports elevated road sections. 3m wide
+// (vs old 18m) so it barely extends past the barrier and can't overtake
+// neighboring road. Slope is ~40° — a steep grass bank, not a gentle hill.
+function buildSteepEmbankment(startIdx, endIdx) {
+  const SKIRT_WIDTH = 1.5; // very narrow — near-vertical ~60° slope
+  const ELEVATION_THRESHOLD = 0.8;
+  const theme = THEMES[CURRENT_MAP?.theme] || THEMES.desert;
+  const color = theme.groundColor;
+
+  for (const side of [-1, 1]) {
+    const positions = [];
+    const indices = [];
+    let v = 0;
+    let prevIncluded = false;
+    for (let i = startIdx; i < endIdx; i++) {
+      const c = ROAD_POINTS[i];
+      if (!c || c.y < ELEVATION_THRESHOLD) {
+        prevIncluded = false;
+        continue;
+      }
+      const { p: perp } = tanPerpAt(i);
+      if (!perp) { prevIncluded = false; continue; }
+      // Inner vertex: tucked just inside the barrier, at road Y
+      const innerX = c.x + perp.x * side * (ROAD_HALF + 0.6);
+      const innerZ = c.z + perp.z * side * (ROAD_HALF + 0.6);
+      const innerY = c.y - 0.1;
+      // Outer vertex: SKIRT_WIDTH out, at ground level — steep slope
+      const outerX = c.x + perp.x * side * (ROAD_HALF + 0.6 + SKIRT_WIDTH);
+      const outerZ = c.z + perp.z * side * (ROAD_HALF + 0.6 + SKIRT_WIDTH);
+      positions.push(innerX, innerY, innerZ);
+      positions.push(outerX, 0, outerZ);
+      if (prevIncluded) {
+        if (side === 1) {
+          indices.push(v - 2, v - 1, v + 1);
+          indices.push(v - 2, v + 1, v);
+        } else {
+          indices.push(v - 2, v + 1, v - 1);
+          indices.push(v - 2, v, v + 1);
+        }
+      }
+      v += 2;
+      prevIncluded = true;
+    }
+    if (positions.length < 4) continue;
+    const geo = new THREE.BufferGeometry();
+    geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+    geo.setIndex(indices);
+    geo.computeVertexNormals();
+    const mat = new THREE.MeshLambertMaterial({ color, side: THREE.FrontSide });
+    scene.add(new THREE.Mesh(geo, mat));
+  }
+}
+
+// === BARRIERS ===
+// For fixed-loop maps, build barrier walls along both road edges.
+// Used both visually and by the soft-bounce physics.
+const BARRIERS = {
+  // Each barrier point: { x, z, perpX, perpZ } — perpendicular outward direction.
+  // Indexed parallel to ROAD_POINTS so lookups by road index are direct.
+  points: [],
+  enabled: false,
+};
+const BARRIER_OFFSET = ROAD_HALF + 3.5; // 3.5m past road edge — real-world runoff zone
+const BARRIER_HEIGHT = 0.8; // visible Armco height without dominating the view
+
+// Trackside advertising — F1-style sponsor strips on the inner face of barriers.
+// Each entry: { image: URL to a 16:9 ad image (logo on transparent bg works best),
+//               bg: hex color string for the gap between repetitions,
+//               url: optional click-through URL for sponsorship tracking }
+// Strips cycle through this list along the barrier length, so different sections
+// of Nordschleife carry different ads.
+// To add ads: drop an image file next to index.html and reference it here.
+const TRACKSIDE_ADS = [
+  { image: 'ads/pirelli.png',     bg: '#f0c000' },
+  { image: 'ads/golden-hour.png', bg: '#1a1a2a' },
+  { image: 'ads/aragon.png',      bg: '#c00020' },
+  { image: 'ads/anvil.png',       bg: '#000814' },
+  { image: 'ads/solera.png',      bg: '#a01020' },
+  { image: 'ads/zephyr.png',      bg: '#0a3050' },
+  { image: 'ads/helix.png',       bg: '#000000' },
+  { image: 'ads/your-ad.png',     bg: '#ffffff' },
+];
+
+// Fallback text labels — used while images load, or if image loading fails.
+// Same order as TRACKSIDE_ADS so indexes line up.
+const TRACKSIDE_AD_FALLBACK_TEXT = [
+  { text: 'PIRELLI',     fg: '#c00000' },
+  { text: 'GOLDEN HOUR', fg: '#ffb060' },
+  { text: 'ARAGON',      fg: '#ffffff' },
+  { text: 'ANVIL',       fg: '#80c8ff' },
+  { text: 'SOLERA',      fg: '#ffd060' },
+  { text: 'ZEPHYR',      fg: '#ffffff' },
+  { text: 'HELIX',       fg: '#ff4040' },
+  { text: 'YOUR AD',     fg: '#202020' },
+];
+
+// Build a tile texture for one ad zone. Tile layout per repeat:
+//   [  image (16:9)  ][  gap (bg color)  ]
+// The image takes ~64% of tile width, gap is ~36%. Tile is wrapped via wrapS so
+// it repeats along the barrier length.
+const _adTextureCache = new Map();
+function getTracksideAdTexture(adIdx) {
+  if (_adTextureCache.has(adIdx)) return _adTextureCache.get(adIdx);
+  const ad = TRACKSIDE_ADS[adIdx];
+  const fallback = TRACKSIDE_AD_FALLBACK_TEXT[adIdx % TRACKSIDE_AD_FALLBACK_TEXT.length];
+  // Canvas dimensions: height fixed at 128, width sized for image + gap.
+  // Image is 16:9, so at 128px tall it's 228px wide. Gap is ~128px → tile ~356px.
+  const TILE_H = 128;
+  const IMG_W  = Math.round(TILE_H * (16 / 9)); // 228
+  const GAP_W  = Math.round(TILE_H * 1.0);      // 128 → gap is 36% of tile
+  const TILE_W = IMG_W + GAP_W;
+  const canvas = document.createElement('canvas');
+  canvas.width = TILE_W;
+  canvas.height = TILE_H;
+  const ctx = canvas.getContext('2d');
+  // Fill entire tile with gap bg color (so image area also gets a backing for
+  // PNGs with transparency)
+  ctx.fillStyle = ad.bg || '#ffffff';
+  ctx.fillRect(0, 0, TILE_W, TILE_H);
+  // Draw fallback text in image slot while image loads (or if it never does)
+  ctx.fillStyle = fallback.fg;
+  ctx.font = 'bold 36px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'middle';
+  ctx.fillText(fallback.text, IMG_W / 2, TILE_H / 2);
+  // Build the texture from this initial canvas; we'll update it when the
+  // image loads
+  const tex = new THREE.CanvasTexture(canvas);
+  tex.wrapS = THREE.RepeatWrapping;
+  tex.wrapT = THREE.ClampToEdgeWrapping;
+  tex.minFilter = THREE.LinearFilter;
+  tex.magFilter = THREE.LinearFilter;
+  // Stash tile dimensions so the strip mesh can size UVs correctly
+  tex.userData = { tileWidthMeters: 2.0 }; // each tile ≈ 2m of barrier
+  _adTextureCache.set(adIdx, tex);
+  // Kick off image load asynchronously — update texture when it arrives
+  if (ad.image) {
+    const img = new Image();
+    if (ad.image.startsWith('http://') || ad.image.startsWith('https://')) {
+      img.crossOrigin = 'anonymous';
+    }
+    img.onload = () => {
+      // Repaint canvas with the image in the image slot
+      ctx.fillStyle = ad.bg || '#ffffff';
+      ctx.fillRect(0, 0, TILE_W, TILE_H);
+      // Draw image to fit IMG_W × TILE_H, preserving 16:9 by letterboxing if needed
+      const aspect = img.naturalWidth / img.naturalHeight;
+      const targetAspect = IMG_W / TILE_H;
+      let dx = 0, dy = 0, dw = IMG_W, dh = TILE_H;
+      if (aspect > targetAspect) {
+        // Image wider than slot — fit width, letterbox top/bottom
+        dh = IMG_W / aspect;
+        dy = (TILE_H - dh) / 2;
+      } else {
+        // Image taller — fit height, pillarbox left/right
+        dw = TILE_H * aspect;
+        dx = (IMG_W - dw) / 2;
+      }
+      ctx.drawImage(img, dx, dy, dw, dh);
+      tex.needsUpdate = true;
+    };
+    img.onerror = () => {
+      // Image failed to load — keep fallback text rendering, log once
+      console.warn('Trackside ad image failed to load:', ad.image);
+    };
+    img.src = ad.image;
+  }
+  return tex;
+}
+
+function buildBarriers(startIdx, endIdx) {
+  BARRIERS.enabled = true;
+  BARRIERS.points = [];
+  const group = new THREE.Group();
+  const barrierEndIdx = endIdx;
+
+  // -- OVERLAP DETECTION (uses spatial grid — O(N) instead of O(N²)) --
+  // ===== TIGHT-SIDE DETECTION =====
+  // For each road point, check whether the barrier on its left (+perp) or
+  // NOTE: Previously had skip-detection logic to hide inner-hairpin barriers.
+  // Removed because it caused physics gaps (car flying through), teleportation
+  // (snapping to far barriers), and the visual fix was worse than the original
+  // "you can see the other leg of the U" artifact. At Wehrseifen the road
+  // genuinely doubles back close to itself in the OSM data, so you'll see
+  // both legs from certain camera angles. This is acceptable.
+
+  // -- BUILD VISUAL MESHES (broken into strips at skip points) --
+  // Also build F1-style trackside ad strips on the inner face of each barrier
+  // (only for fixed-loop tracks like Nordschleife — procedural maps use
+  // perpendicular highway billboards instead).
+  const isFixedLoop = CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop';
+  const AD_ZONE_LENGTH = 60; // road points per ad zone (~240m) — slower color cycling
+
+  for (const side of [-1, 1]) {
+    let positions = [];
+    let indices = [];
+    let v = 0;
+
+    const flushStrip = () => {
+      if (positions.length === 0) return;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(positions, 3));
+      geo.setIndex(indices);
+      geo.computeVertexNormals();
+      const mat = new THREE.MeshLambertMaterial({
+        color: 0xb8b8b0, // silver-grey Armco — neutral, matches real barriers
+        side: THREE.DoubleSide
+      });
+      group.add(new THREE.Mesh(geo, mat));
+      positions = [];
+      indices = [];
+      v = 0;
+    };
+
+    // Ad strip state — per-zone, flushed when we hit a new zone or a skip point
+    let adPositions = [];
+    let adUVs = [];
+    let adIndices = [];
+    let adV = 0;
+    let adZoneIdx = -1;
+    let adLengthAccum = 0; // running barrier length within the current zone — drives U
+    const flushAdStrip = () => {
+      if (adPositions.length === 0 || adZoneIdx < 0) return;
+      const geo = new THREE.BufferGeometry();
+      geo.setAttribute('position', new THREE.Float32BufferAttribute(adPositions, 3));
+      geo.setAttribute('uv', new THREE.Float32BufferAttribute(adUVs, 2));
+      geo.setIndex(adIndices);
+      geo.computeVertexNormals();
+      const tex = getTracksideAdTexture(adZoneIdx % TRACKSIDE_ADS.length);
+      const mat = new THREE.MeshBasicMaterial({ map: tex, side: THREE.DoubleSide });
+      group.add(new THREE.Mesh(geo, mat));
+      adPositions = [];
+      adUVs = [];
+      adIndices = [];
+      adV = 0;
+    };
+
+    let prevPx = null, prevPz = null;
+
+    for (let i = startIdx; i < barrierEndIdx; i++) {
+      const c = ROAD_POINTS[i];
+      const { p: perp } = tanPerpAt(i);
+      if (!perp) continue;
+      const px = c.x + perp.x * side * BARRIER_OFFSET;
+      const pz = c.z + perp.z * side * BARRIER_OFFSET;
+      // Save collision data
+      BARRIERS.points[i] = BARRIERS.points[i] || {};
+      if (side === 1) {
+        BARRIERS.points[i].rightX = px;
+        BARRIERS.points[i].rightZ = pz;
+      } else {
+        BARRIERS.points[i].leftX = px;
+        BARRIERS.points[i].leftZ = pz;
+      }
+      positions.push(px, c.y, pz);
+      positions.push(px, c.y + BARRIER_HEIGHT, pz);
+      if (v > 0) {
+        indices.push(v - 2, v - 1, v + 1);
+        indices.push(v - 2, v + 1, v);
+      }
+      v += 2;
+
+      // -- AD STRIP BUILD (only on fixed-loop tracks) --
+      if (isFixedLoop) {
+        // Inset ad strip slightly toward the road so it sits on the inner
+        // face of the barrier without z-fighting.
+        const inset = 0.06;
+        const ax = px - perp.x * side * inset;
+        const az = pz - perp.z * side * inset;
+        // Ad strip covers lower 60% of barrier height, starting just above ground
+        const adBottomY = c.y + 0.10;
+        const adTopY    = c.y + BARRIER_HEIGHT * 0.62;
+        // Compute current ad zone — flushes when zone changes
+        const newZoneIdx = Math.floor((i - startIdx) / AD_ZONE_LENGTH);
+        if (newZoneIdx !== adZoneIdx) {
+          flushAdStrip();
+          adZoneIdx = newZoneIdx;
+          adLengthAccum = 0;
+          prevPx = null; prevPz = null;
+        }
+        // Compute running distance for U coordinate
+        if (prevPx !== null) {
+          adLengthAccum += Math.hypot(ax - prevPx, az - prevPz);
+        }
+        prevPx = ax; prevPz = az;
+        // Tile texture is (image 16:9 + gap). Physical tile width = 1.78m so
+        // the image displays at true 16:9 on the 0.64m-tall strip.
+        const u = adLengthAccum / 1.78;
+        adPositions.push(ax, adBottomY, az);
+        adPositions.push(ax, adTopY,    az);
+        adUVs.push(u, 0);
+        adUVs.push(u, 1);
+        if (adV > 0) {
+          adIndices.push(adV - 2, adV - 1, adV + 1);
+          adIndices.push(adV - 2, adV + 1, adV);
+        }
+        adV += 2;
+      }
+    }
+    // Close the loop: add a final quad from the last point back to the first
+    // barrier vertex so the start/finish seam has no gap or jutting segment.
+    if (isFixedLoop && v >= 2 && ROAD_POINTS[startIdx]) {
+      const c0 = ROAD_POINTS[startIdx];
+      const { p: perp0 } = tanPerpAt(startIdx);
+      if (perp0) {
+        const px0 = c0.x + perp0.x * side * BARRIER_OFFSET;
+        const pz0 = c0.z + perp0.z * side * BARRIER_OFFSET;
+        positions.push(px0, c0.y, pz0);
+        positions.push(px0, c0.y + BARRIER_HEIGHT, pz0);
+        indices.push(v - 2, v - 1, v + 1);
+        indices.push(v - 2, v + 1, v);
+        v += 2;
+      }
+    }
+    flushStrip();
+    if (isFixedLoop) flushAdStrip();
+  }
+  scene.add(group);
+}
+
+// Initialise the road based on the chosen map. Called by startGame() after
+// map selection. Cleans up any prior state if called more than once.
+function initRoad() {
+  // Reset state
+  ROAD_POINTS.length = 0;
+  ROAD_GRID.clear();
+  nextChunkIdx = 0;
+  chunks.length = 0;
+  carRoadIdx = 0;
+  BARRIERS.points = [];
+  BARRIERS.enabled = false;
+  // Apply per-map road width — Nordschleife is narrow (11m), desert is wide (22m)
+  ROAD_WIDTH = CURRENT_MAP.roadWidth || 22;
+  ROAD_HALF = ROAD_WIDTH / 2;
+  // Reset hairpin state for procedural modes
+  currentHairpin = null;
+  nextHairpinAt = 600;
+
+  if (CURRENT_MAP.type === 'fixed_loop') {
+    buildFixedLoopRoad(CURRENT_MAP.controlPoints);
+  } else {
+    // procedural_infinite or procedural_straight: use the pen-walker
+    noiseA[0] = 0; noiseB[0] = 0;
+    noiseA[1] = 0.1; noiseB[1] = 0.1;
+    roadPen.x = 0; roadPen.z = -200; roadPen.heading = 0; roadPen.distance = 0;
+    const entrySteps = Math.ceil(280 / POINT_STEP);
+    for (let i = 0; i < entrySteps; i++) {
+      const p = advancePen();
+      ROAD_POINTS[nextChunkIdx] = p;
+      roadGridAdd(p, nextChunkIdx);
+      nextChunkIdx++;
+    }
+    const { meshes, sceneryGroup } = buildChunkMeshes(0, nextChunkIdx);
+    chunks.push({ startIdx: 0, endIdx: nextChunkIdx, meshes, sceneryGroup });
+    for (let i = 0; i < CHUNKS_AHEAD; i++) generateNextChunk();
+  }
+}
+// Note: initRoad() is now called by startGame() after the player picks a map.
+
+// Tracks the car's monotonic progress along the road. Only ever moves
+// FORWARD (toward higher indices). This prevents the streamer from
+// getting confused by geometric proximity to old segments.
+let carRoadIdx = 0;
+
+// Respawn state — kicks in if the player has been far from the road for
+// long enough that they're clearly lost (not just a wide drift).
+const RESPAWN_DISTANCE = 70;        // meters from road centerline
+const RESPAWN_HOLD_TIME = 1.5;      // seconds of being lost before respawn
+let lostTimer = 0;
+let respawning = false;             // brief flag during teleport for fade
+
+function attemptRespawn() {
+  // Find nearest road point with a broad search
+  const near = nearestRoadPoint(carState.position.x, carState.position.z, 600);
+  if (near.idx < 0) return;
+  const roadP = ROAD_POINTS[near.idx];
+  if (!roadP) return;
+  const { t: roadTan } = tanPerpAt(near.idx);
+  if (!roadTan) return;
+
+  // Teleport to the road point, facing along the tangent
+  carState.position.set(roadP.x, 0, roadP.z);
+  carState.heading = Math.atan2(roadTan.x, roadTan.z);
+  // Cut speed to half — feels less jarring than dropping to zero, and
+  // keeps the engine note from suddenly idling
+  const halfSpeed = carState.velocity.length() * 0.5;
+  setBodyAxes(carState.heading);
+  carState.velocity.copy(_forward).multiplyScalar(Math.min(halfSpeed, 18));
+  carState.driftTime = 0;
+  carState.steerInput = 0;
+  // Reset the road index to land on the new spot (only allow forward)
+  if (near.idx > carRoadIdx) carRoadIdx = near.idx;
+  lostTimer = 0;
+  // Trigger a brief respawn flash
+  respawning = true;
+  const flashEl = document.getElementById('respawnFlash');
+  const labelEl = document.getElementById('respawnLabel');
+  if (flashEl) flashEl.classList.add('active');
+  if (labelEl) labelEl.classList.add('active');
+  setTimeout(() => {
+    respawning = false;
+    if (flashEl) flashEl.classList.remove('active');
+    if (labelEl) labelEl.classList.remove('active');
+  }, 450);
+}
+
+// Per-frame: ensure chunks ahead of car, dispose chunks far behind
+function streamRoad() {
+  // For fixed-loop tracks: do a global search (loop is small enough)
+  // and allow the index to wrap. Use 3D distance so the car at y=0 below
+  // a bridge doesn't snap to the elevated road point above it.
+  if (CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop') {
+    let bestIdx = -1, bestD2 = Infinity;
+    for (let i = 0; i < nextChunkIdx; i++) {
+      const p = ROAD_POINTS[i];
+      if (!p) continue;
+      const dx = p.x - carState.position.x;
+      const dy = p.y - carState.position.y;
+      const dz = p.z - carState.position.z;
+      // Weight Y heavily so the bridge layer separation matters
+      const d2 = dx*dx + dy*dy*16 + dz*dz;
+      if (d2 < bestD2) { bestD2 = d2; bestIdx = i; }
+    }
+    if (bestIdx >= 0) carRoadIdx = bestIdx;
+    return; // no streaming for fixed loops
+  }
+
+  // Procedural modes: monotonic forward search + chunk generation/disposal
+  const SEARCH_AHEAD = 60;  // how many indices ahead to scan
+  const SEARCH_BEHIND = 4;  // small tolerance for slight reverse (off-road wiggle)
+  const lo = Math.max(0, carRoadIdx - SEARCH_BEHIND);
+  const hi = Math.min(nextChunkIdx, carRoadIdx + SEARCH_AHEAD);
+  let bestIdx = -1, bestD2 = Infinity;
+  for (let i = lo; i < hi; i++) {
+    const p = ROAD_POINTS[i];
+    if (!p) continue;
+    const dx = p.x - carState.position.x;
+    const dz = p.z - carState.position.z;
+    const d2 = dx*dx + dz*dz;
+    if (d2 < bestD2) { bestD2 = d2; bestIdx = i; }
+  }
+
+  // If we didn't find anything in the window, fall back to a broader search.
+  if (bestIdx < 0) {
+    const near = nearestRoadPoint(carState.position.x, carState.position.z, 400);
+    if (near.idx < 0) return;
+    bestIdx = near.idx;
+  }
+
+  // Only advance forward.
+  if (bestIdx > carRoadIdx) carRoadIdx = bestIdx;
+
+  const carIdx = carRoadIdx;
+  const targetAheadPoints = Math.ceil((CHUNKS_AHEAD * CHUNK_TARGET_LENGTH) / POINT_STEP);
+
+  // --- GENERATE AHEAD ---
+  let generatedThisFrame = 0;
+  while (
+    (nextChunkIdx - 1 - carIdx) < targetAheadPoints &&
+    generatedThisFrame < 2
+  ) {
+    generateNextChunk();
+    generatedThisFrame++;
+  }
+
+  // --- DISPOSE BEHIND ---
+  // Only dispose chunks well behind the car. Always keep at least 2 chunks alive.
+  const disposeThresholdPoints = CHUNKS_BEHIND * Math.ceil(CHUNK_TARGET_LENGTH / POINT_STEP);
+  while (chunks.length > 2) {
+    const c = chunks[0];
+    if (c.endIdx + disposeThresholdPoints < carIdx) {
+      disposeChunk(c);
+      chunks.shift();
+    } else break;
+  }
+}
+
+// ====================================================================
+//  CAR
+// ====================================================================
+function buildCar() {
+  const g = new THREE.Group();
+
+  const body = new THREE.Mesh(
+    new THREE.BoxGeometry(1.9, 0.55, 4.2),
+    new THREE.MeshPhongMaterial({ color: 0xd83040, shininess: 90, specular: 0x553030 })
+  );
+  body.position.y = 0.55; body.castShadow = true;
+  body.userData.role = 'body';
+  body.userData.external = true;
+  g.add(body);
+
+  const cabin = new THREE.Mesh(
+    new THREE.BoxGeometry(1.6, 0.5, 1.9),
+    new THREE.MeshPhongMaterial({ color: 0x1a1a22, shininess: 110, specular: 0x444466 })
+  );
+  cabin.position.set(0, 1.1, -0.2); cabin.castShadow = true;
+  cabin.userData.external = true;
+  g.add(cabin);
+
+  const hood = new THREE.Mesh(
+    new THREE.BoxGeometry(1.7, 0.06, 1.4),
+    new THREE.MeshPhongMaterial({ color: 0xb02838 })
+  );
+  hood.position.set(0, 0.87, 1.0);
+  hood.userData.role = 'accent';
+  hood.userData.external = true;
+  g.add(hood);
+
+  const hlMat = new THREE.MeshBasicMaterial({ color: 0xfff4d0 });
+  [-0.65, 0.65].forEach(x => {
+    const hl = new THREE.Mesh(new THREE.BoxGeometry(0.45, 0.18, 0.12), hlMat);
+    hl.position.set(x, 0.7, 2.1);
+    hl.userData.external = true;
+    g.add(hl);
+  });
+
+  const tlMat = new THREE.MeshBasicMaterial({ color: 0xff3030 });
+  [-0.7, 0.7].forEach(x => {
+    const tl = new THREE.Mesh(new THREE.BoxGeometry(0.4, 0.12, 0.08), tlMat);
+    tl.position.set(x, 0.7, -2.1);
+    tl.userData.external = true;
+    g.add(tl);
+  });
+
+  const wheelGeo = new THREE.CylinderGeometry(0.42, 0.42, 0.32, 18);
+  const wheelMat = new THREE.MeshPhongMaterial({ color: 0x111111, shininess: 30 });
+  const wheels = [];
+  [[ 0.95, 1.35, true], [-0.95, 1.35, true], [ 0.95, -1.35, false], [-0.95, -1.35, false]]
+    .forEach(([x, z, isFront]) => {
+      const pivot = new THREE.Group();
+      pivot.position.set(x, 0.42, z);
+      const w = new THREE.Mesh(wheelGeo, wheelMat);
+      w.rotation.z = Math.PI / 2; w.castShadow = true;
+      w.userData.external = true;
+      pivot.add(w);
+      pivot.userData = { wheel: w, isFront: isFront, external: true };
+      g.add(pivot);
+      wheels.push(pivot);
+    });
+
+  g.userData.wheels = wheels;
+  return g;
+}
+const car = buildCar();
+scene.add(car);
+
+// === COCKPIT INTERIOR ===
+// Built as a child of `car` so it moves and rotates with the vehicle.
+// Visible only in DRIVER POV; hidden in all other camera modes.
+// Positioned for a camera at y=0.92 (lower seated position), so all
+// cockpit elements sit clearly below the eye line.
+const cockpit = new THREE.Group();
+cockpit.visible = false;
+car.add(cockpit);
+
+// Dashboard top — sits comfortably below eye level
+const dashMat = new THREE.MeshPhongMaterial({ color: 0x121418, shininess: 25 });
+const dashTop = new THREE.Mesh(
+  new THREE.BoxGeometry(1.5, 0.08, 0.50),
+  dashMat
+);
+dashTop.position.set(0, 0.72, 0.55);
+cockpit.add(dashTop);
+
+// Dashboard front fascia
+const dashFront = new THREE.Mesh(
+  new THREE.BoxGeometry(1.5, 0.42, 0.06),
+  dashMat
+);
+dashFront.position.set(0, 0.49, 0.80);
+cockpit.add(dashFront);
+
+// Instrument cluster
+const clusterMat = new THREE.MeshBasicMaterial({ color: 0x1a1c22 });
+const cluster = new THREE.Mesh(
+  new THREE.BoxGeometry(0.50, 0.14, 0.02),
+  clusterMat
+);
+cluster.position.set(0, 0.74, 0.79);
+cockpit.add(cluster);
+const dialMat = new THREE.MeshBasicMaterial({ color: 0xffb070 });
+for (const dx of [-0.13, 0.13]) {
+  const dial = new THREE.Mesh(new THREE.CircleGeometry(0.052, 16), dialMat);
+  dial.position.set(dx, 0.74, 0.79 + 0.012);
+  cockpit.add(dial);
+}
+
+// A-pillars
+const pillarMat = new THREE.MeshPhongMaterial({ color: 0x0a0b0d, shininess: 15 });
+function makePillar(side) {
+  const p = new THREE.Mesh(
+    new THREE.BoxGeometry(0.10, 1.0, 0.10),
+    pillarMat
+  );
+  p.position.set(0.78 * side, 1.15, 0.55);
+  p.rotation.z = -0.18 * side;
+  p.rotation.x = -0.35;
+  return p;
+}
+cockpit.add(makePillar(-1), makePillar(1));
+
+// Inside roof — above eye level
+const roof = new THREE.Mesh(
+  new THREE.BoxGeometry(1.55, 0.04, 1.4),
+  new THREE.MeshPhongMaterial({ color: 0x18181c })
+);
+roof.position.set(0, 1.48, -0.05);
+cockpit.add(roof);
+
+// Steering wheel
+const swMat = new THREE.MeshPhongMaterial({ color: 0x0c0d10, shininess: 80, specular: 0x404040 });
+const steeringWheelTilt = new THREE.Group();
+const steeringWheel = new THREE.Group();
+steeringWheelTilt.add(steeringWheel);
+const wheelRim = new THREE.Mesh(
+  new THREE.TorusGeometry(0.20, 0.024, 8, 24),
+  swMat
+);
+steeringWheel.add(wheelRim);
+for (const a of [0, Math.PI / 2 + 0.4, Math.PI / 2 - 0.4]) {
+  const sp = new THREE.Mesh(
+    new THREE.BoxGeometry(0.17, 0.02, 0.018),
+    swMat
+  );
+  sp.rotation.z = a;
+  steeringWheel.add(sp);
+}
+const hub = new THREE.Mesh(
+  new THREE.CylinderGeometry(0.045, 0.045, 0.03, 12),
+  new THREE.MeshPhongMaterial({ color: 0xffb070 })
+);
+hub.rotation.x = Math.PI / 2;
+steeringWheel.add(hub);
+// Tilt wheel face toward driver
+steeringWheelTilt.rotation.x = -1.20;
+// Position: lower-center of the cockpit, in front of the camera
+steeringWheelTilt.position.set(0, 0.58, 0.60);
+cockpit.add(steeringWheelTilt);
+
+// Update the car's body color from a car config
+function recolorCar(carConfig) {
+  if (!car) return;
+  car.traverse(child => {
+    if (!child.isMesh) return;
+    if (child.userData.role === 'body') {
+      child.material.color.setHex(carConfig.color);
+    } else if (child.userData.role === 'accent') {
+      const bodyC = new THREE.Color(carConfig.color);
+      const accentC = new THREE.Color(carConfig.accentColor || carConfig.color);
+      const mixed = bodyC.clone().lerp(accentC, 0.6);
+      child.material.color.copy(mixed);
+    }
+  });
+}
+
+// ====================================================================
+//  PHYSICS
+// ====================================================================
+const carState = {
+  position: new THREE.Vector3(0, 0, 0),
+  velocity: new THREE.Vector3(0, 0, 0),
+  heading: 0,
+  steerAngle: 0,
+  driftTime: 0,
+  steerInput: 0,
+  gear: 1,
+  rpm: 900,
+  shiftTimer: 0,
+  shiftDirection: 0,
+  driftCommit: 0,    // 0 = no drift, >0 = currently committed
+  driftSign: 0,      // locked slide direction during drift; 0 between drifts
+  driftKickRemaining: 0, // residual rotation budget from handbrake initiation
+  driftExitTimer: 0, // smooth-exit transition timer after drift ends
+};
+
+// ====================================================================
+//  CAR CATALOG — five distinct profiles with their own physics + audio
+// ====================================================================
+// Each car has its own driving feel: top speed, acceleration curve,
+// grip, gearbox, engine character. Selected via the title menu before play.
+const CARS = [
+  {
+    id: 'gt3rs',
+    name: 'Aragon GT3 RS',
+    inspiration: '911 GT3 RS',
+    tagline: 'precision · flat-six',
+    color: 0xe2e2e6,
+    accentColor: 0xd83040,
+    accel: 9.5,
+    maxForward: 85,    // 306 km/h
+    gripNormal: 6.4,
+    gripHandbrake: 0.45,
+    gearRatios: [3.9, 2.8, 2.1, 1.65, 1.30, 1.05, 0.85],
+    finalDrive: 5.04,  // tuned so top speed (306 km/h) lands at ~94% of redline
+    rpmIdle: 1000,
+    rpmRedline: 8800,
+    rpmShiftUp: 8100,
+    rpmShiftDown: 4600,
+    cylinders: 6,
+    engineSound: {
+      // Flat-six rasp — bright top, hollow mid, prominent 2nd harmonic
+      reso1Base: 240, reso1Top: 580,  reso1Q: 9,
+      reso2Base: 800, reso2Top: 1500, reso2Q: 4, reso2Gain: 8,
+      lpBase: 1800,   lpTop: 5500,
+      intakeBase: 350, intakeTop: 1100, intakeQ: 1.6,
+      intakeGainMul: 0.22,
+      engineGainMul: 1.0,
+      throttleBonus: 0.18,
+    },
+  },
+  {
+    id: 'm4csl',
+    name: 'Anvil M4 CSL',
+    inspiration: 'BMW M4 CSL',
+    tagline: 'balanced · inline-six',
+    color: 0x1a3242,
+    accentColor: 0xc8a464,
+    accel: 8.6,
+    maxForward: 85.3,  // 307 km/h
+    gripNormal: 6.0,
+    gripHandbrake: 0.42,
+    gearRatios: [4.0, 2.9, 2.2, 1.70, 1.35, 1.10, 0.90, 0.74],
+    finalDrive: 5.11,  // top speed (307 km/h) hits redline
+    rpmIdle: 900,
+    rpmRedline: 7800,
+    rpmShiftUp: 7200,
+    rpmShiftDown: 4200,
+    cylinders: 6,
+    engineSound: {
+      // Turbo inline-6 — smooth fundamental, less harmonic content, deeper
+      reso1Base: 180, reso1Top: 440,  reso1Q: 7,
+      reso2Base: 500, reso2Top: 1000, reso2Q: 2.5, reso2Gain: 5,
+      lpBase: 1500, lpTop: 4000,                  // darker top than NA
+      intakeBase: 300, intakeTop: 950, intakeQ: 1.8,
+      intakeGainMul: 0.30,   // more intake (turbo whoosh)
+      engineGainMul: 0.95,
+      throttleBonus: 0.16,
+    },
+  },
+  {
+    id: 'laferrari',
+    name: 'Solera Stradale',
+    inspiration: 'LaFerrari',
+    tagline: 'screamer · v12',
+    color: 0xb30a17,
+    accentColor: 0x111111,
+    accel: 10.4,
+    maxForward: 100,   // 360 km/h
+    gripNormal: 5.8,
+    gripHandbrake: 0.38,
+    gearRatios: [4.1, 2.95, 2.25, 1.75, 1.40, 1.12, 0.92],
+    finalDrive: 4.04,  // top speed (360 km/h) hits redline
+    rpmIdle: 1100,
+    rpmRedline: 9000,
+    rpmShiftUp: 8500,
+    rpmShiftDown: 5000,
+    cylinders: 12,
+    engineSound: {
+      // V12 scream — bright everywhere, high resonances, trumpet-like at redline
+      reso1Base: 320, reso1Top: 900,  reso1Q: 11,    // sharp, focused
+      reso2Base: 1100, reso2Top: 2600, reso2Q: 5, reso2Gain: 11, // big midrange peak (the wail)
+      lpBase: 2200, lpTop: 7500,                     // very bright top
+      intakeBase: 400, intakeTop: 1400, intakeQ: 2.0,
+      intakeGainMul: 0.18,    // less noise, more pure tone
+      engineGainMul: 1.05,
+      throttleBonus: 0.22,    // strong throttle response
+    },
+  },
+  {
+    id: 'huayra',
+    name: 'Zephyr Aetós',
+    inspiration: 'Pagani Huayra',
+    tagline: 'floaty · twin-turbo v12',
+    color: 0xb29560,
+    accentColor: 0x2a221a,
+    accel: 9.8,
+    maxForward: 105.6, // 380 km/h
+    gripNormal: 5.4,         // floatier — more drift-prone
+    gripHandbrake: 0.32,
+    gearRatios: [3.8, 2.7, 2.05, 1.60, 1.28, 1.05, 0.86],
+    finalDrive: 3.10,  // top speed (380 km/h) hits redline
+    rpmIdle: 900,
+    rpmRedline: 6800,        // turbo limit
+    rpmShiftUp: 6300,
+    rpmShiftDown: 3600,
+    cylinders: 12,
+    engineSound: {
+      // Twin-turbo V12 — V12 fundamental but muffled top end + big turbo whoosh
+      reso1Base: 280, reso1Top: 620, reso1Q: 8,
+      reso2Base: 700, reso2Top: 1400, reso2Q: 3.5, reso2Gain: 7,
+      lpBase: 1300, lpTop: 3200,                     // dark — turbos muffle
+      intakeBase: 250, intakeTop: 800, intakeQ: 1.4,
+      intakeGainMul: 0.42,    // huge intake whoosh
+      engineGainMul: 0.92,
+      throttleBonus: 0.14,
+    },
+  },
+  {
+    id: 'jesko',
+    name: 'Helix Apex',
+    inspiration: 'Koenigsegg Jesko',
+    tagline: 'explosive · twin-turbo v8',
+    color: 0x141420,
+    accentColor: 0x65c8ff,
+    accel: 11.6,             // brutal
+    maxForward: 138.9,       // 500 km/h
+    gripNormal: 5.6,         // twitchy
+    gripHandbrake: 0.42,
+    gearRatios: [4.2, 3.1, 2.4, 1.9, 1.50, 1.18, 0.95, 0.78],
+    finalDrive: 3.13,  // top speed (500 km/h) hits redline
+    rpmIdle: 1000,
+    rpmRedline: 8200,
+    rpmShiftUp: 7600,
+    rpmShiftDown: 4400,
+    cylinders: 8,
+    engineSound: {
+      // Twin-turbo V8 — deep bassy rumble, low resonators, massive intake
+      reso1Base: 140, reso1Top: 380,  reso1Q: 7,    // very low fundamental
+      reso2Base: 420, reso2Top: 1000, reso2Q: 3, reso2Gain: 8,
+      lpBase: 1100, lpTop: 3400,
+      intakeBase: 220, intakeTop: 700, intakeQ: 1.2,
+      intakeGainMul: 0.50,    // monstrous turbo intake — biggest of all
+      engineGainMul: 1.10,    // loudest car
+      throttleBonus: 0.20,
+    },
+  },
+];
+
+let CURRENT_CAR = CARS[0]; // default before menu selection
+
+// Per-car physics state — written by applyCar(), read by physics code.
+// These were const before; now they're let so the menu can swap cars.
+let ACCEL              = 9;
+let MAX_FORWARD        = 86;
+let GRIP_NORMAL        = 6.0;
+let GRIP_HANDBRAKE     = 0.9;
+let GEAR_RATIOS        = [4.2, 3.0, 2.3, 1.85, 1.5, 1.22, 1.0, 0.82];
+let FINAL_DRIVE        = 3.6;
+let RPM_IDLE           = 900;
+let RPM_REDLINE        = 8500;
+let RPM_SHIFT_UP       = 7800;
+let RPM_SHIFT_DOWN     = 4500;
+let ENGINE_CYLINDERS   = 8;
+
+function applyCar(car) {
+  CURRENT_CAR = car;
+  ACCEL = car.accel;
+  MAX_FORWARD = car.maxForward;
+  GRIP_NORMAL = car.gripNormal;
+  GRIP_HANDBRAKE = car.gripHandbrake;
+  GEAR_RATIOS = car.gearRatios.slice();
+  FINAL_DRIVE = car.finalDrive;
+  RPM_IDLE = car.rpmIdle;
+  RPM_REDLINE = car.rpmRedline;
+  RPM_SHIFT_UP = car.rpmShiftUp;
+  RPM_SHIFT_DOWN = car.rpmShiftDown;
+  ENGINE_CYLINDERS = car.cylinders;
+  // Apply per-car engine sound profile to live audio nodes (if audio is up).
+  // applyEngineSound() reads CURRENT_CAR.engineSound and pushes the values into
+  // the BiquadFilters / Gain nodes — so the engine voice changes immediately
+  // when you swap cars in the menu.
+  applyEngineSound();
+  // Reposition the upshift tick on the rev bar to match the new car
+  const tick = document.getElementById('upshiftTick');
+  if (tick) {
+    const frac = (RPM_SHIFT_UP - RPM_IDLE) / (RPM_REDLINE - RPM_IDLE);
+    tick.style.left = (frac * 100).toFixed(1) + '%';
+  }
+  // Update the car's body color
+  recolorCar(car);
+  // Reset the car so RPM idles correctly at the new redline range
+  if (typeof resetCar === 'function') resetCar();
+}
+
+// Apply default before everything else runs
+// (CURRENT_CAR is already CARS[0], values match — this is for ordering)
+
+// Universal physics constants (same for all cars)
+const BRAKE_FORCE        = 32;
+const REVERSE_ACCEL      = 6;
+const MAX_REVERSE        = -10;
+const COAST_DRAG_FORWARD = 1.8;
+const STEER_RATE         = 1.9;
+const STEER_FACTOR_MIN   = 0.45;
+const STEER_INPUT_RAMP   = 5.5;
+const STEER_INPUT_RELEASE= 7.0;
+
+// Road-snap assist (active near road edges) — pulls heading toward road
+// direction and pushes velocity back toward centerline. Stronger on corner
+// exits when the player eases off the wheel.
+const SNAP_HEADING_K = 2.8;
+const SNAP_LATERAL_K = 1.8;
+
+// Smoothed target tangent for the assist (persists frame-to-frame).
+// Reset to null when the assist disengages.
+let assistTangentSmoothed = null;
+
+// 8-speed gearbox values are per-car (see applyCar above).
+// WHEEL_RADIUS and SHIFT_DURATION are universal.
+const WHEEL_RADIUS   = 0.42;
+
+// Gear-shift feel: power cut during shift, plus visual/audio cues
+const SHIFT_DURATION = 0.18;   // seconds power is cut during a shift
+
+const _forward = new THREE.Vector3();
+const _right   = new THREE.Vector3();
+// Scratch vectors for barrier collision (avoid per-frame allocation)
+const _barrierTan  = new THREE.Vector3();
+const _barrierPerp = new THREE.Vector3();
+const _smokePos    = new THREE.Vector3();
+function setBodyAxes(h) {
+  _forward.set(Math.sin(h), 0, Math.cos(h));
+  _right.set(Math.cos(h), 0, -Math.sin(h));
+}
+
+const keys = {};
+let audioHintEl = null;
+addEventListener('keydown', e => {
+  // Don't process driving inputs while the menu is up
+  if (typeof gameStarted !== 'undefined' && !gameStarted) return;
+  if (['Space','ArrowUp','ArrowDown','ArrowLeft','ArrowRight'].includes(e.code)) e.preventDefault();
+  if (e.repeat) return;
+  initAudio();
+  if (audioHintEl) audioHintEl.classList.remove('show');
+  keys[e.code] = true;
+  if (e.code === 'KeyR') resetCar();
+  if (e.code === 'KeyC') cycleView();
+});
+addEventListener('keyup', e => { keys[e.code] = false; });
+
+// lapState is declared here so resetCar() can reference it safely.
+// It gets assigned its real value later in the LAP TIMING section.
+let lapState = null;
+
+function resetCar() {
+  // Respect the current map's spawn position and heading
+  if (CURRENT_MAP && CURRENT_MAP.spawn) {
+    carState.position.set(CURRENT_MAP.spawn.x, 0, CURRENT_MAP.spawn.z);
+    carState.heading = CURRENT_MAP.spawn.heading;
+  } else {
+    carState.position.set(0, 0, 0);
+    carState.heading = 0;
+  }
+  carState.velocity.set(0, 0, 0);
+  carState.steerAngle = 0;
+  carState.driftTime = 0;
+  carState.steerInput = 0;
+  carState.gear = 1;
+  carState.rpm = RPM_IDLE;
+  carState.shiftTimer = 0;
+  carState.shiftDirection = 0;
+  carState.driftCommit = 0;
+  carState.driftSign = 0;
+  carRoadIdx = 0;
+  // Reset lap timer too (so the current lap restarts)
+  if (lapState && lapState.active) {
+    lapState.running = false;
+    lapState.currentLap = 0;
+    lapState.prevIdx = 0;
+  }
+}
+
+// Heading-difference helper (returns -PI..PI)
+function angleDelta(a, b) {
+  let d = a - b;
+  while (d >  Math.PI) d -= 2 * Math.PI;
+  while (d < -Math.PI) d += 2 * Math.PI;
+  return d;
+}
+
+function updatePhysics(dt) {
+  const throttle = (keys.KeyW || keys.ArrowUp) ? 1 : 0;
+  const brake    = (keys.KeyS || keys.ArrowDown) ? 1 : 0;
+  const steerRaw = ((keys.KeyA || keys.ArrowLeft) ? 1 : 0) - ((keys.KeyD || keys.ArrowRight) ? 1 : 0);
+  const handbrake= keys.Space ? 1 : 0;
+
+  // Smoothed steering input (the big stress fix from last round)
+  if (Math.sign(steerRaw) === Math.sign(carState.steerInput) || carState.steerInput === 0) {
+    const k = steerRaw === 0 ? STEER_INPUT_RELEASE : STEER_INPUT_RAMP;
+    carState.steerInput += (steerRaw - carState.steerInput) * (1 - Math.exp(-k * dt));
+  } else {
+    carState.steerInput += (steerRaw - carState.steerInput) * (1 - Math.exp(-9 * dt));
+  }
+  const steerIn = carState.steerInput;
+
+  setBodyAxes(carState.heading);
+
+  let fwdVel = carState.velocity.dot(_forward);
+  let latVel = carState.velocity.dot(_right);
+
+  // Shift timer counts down — during a shift, throttle is cut (the "punch" feel)
+  if (carState.shiftTimer > 0) {
+    carState.shiftTimer = Math.max(0, carState.shiftTimer - dt);
+    if (carState.shiftTimer === 0) carState.shiftDirection = 0;
+  }
+  const shifting = carState.shiftTimer > 0;
+
+  // Gear-aware acceleration — lower gear = more wheel torque = harder pull.
+  // Multiplier is the current gear ratio normalized so gear 3 (~mid) ≈ 1.0x
+  const gearMul = GEAR_RATIOS[carState.gear - 1] / GEAR_RATIOS[2];
+  // Near redline, torque drops off (you're past the powerband)
+  const rpmFracForTorque = Math.max(0, Math.min(1, (carState.rpm - RPM_IDLE) / (RPM_REDLINE - RPM_IDLE)));
+  const torqueCurve = rpmFracForTorque < 0.85
+    ? 0.55 + rpmFracForTorque * 0.65          // climbs through powerband
+    : 1.20 - (rpmFracForTorque - 0.85) * 1.8; // falls off past 0.85 redline
+  const effectiveAccel = ACCEL * gearMul * Math.max(0.35, torqueCurve);
+
+  if (throttle && !shifting) {
+    fwdVel += effectiveAccel * dt;
+  } else if (brake) {
+    if (fwdVel > 0.5) fwdVel -= BRAKE_FORCE * dt;
+    else              fwdVel -= REVERSE_ACCEL * dt;
+  } else {
+    const drag = COAST_DRAG_FORWARD * dt;
+    if (fwdVel > 0)      fwdVel = Math.max(0, fwdVel - drag);
+    else if (fwdVel < 0) fwdVel = Math.min(0, fwdVel + drag);
+  }
+  fwdVel = Math.max(MAX_REVERSE, Math.min(MAX_FORWARD, fwdVel));
+
+  // ------------------------------------------------------------------
+  // DRIFT MODE — Asphalt-style. The car commits to a beautiful slip
+  // angle the moment the player commits (handbrake at speed). Counter-
+  // steering exits the drift naturally. Player just holds space + steer,
+  // the angle takes care of itself.
+  // ------------------------------------------------------------------
+  const speedNow = Math.hypot(fwdVel, latVel);
+  // Progressive grip falloff — high speeds genuinely punish you for not braking.
+  // Normal: 100% at <22 m/s, 88% at 50 m/s, 65% at 100 m/s, 45% at 138 m/s.
+  // This makes top-end cars (Jesko) actually need to brake for corners,
+  // closing the gap with corner-focused cars (GT3 RS) on twisty tracks.
+  const gripFalloffNormal = THREE.MathUtils.clamp(1.0 - Math.max(0, speedNow - 22) * 0.005, 0.40, 1.0);
+  const gripFalloffDrift  = THREE.MathUtils.clamp(1.0 - Math.max(0, speedNow - 22) * 0.018, 0.35, 1.0);
+
+  // 1. Decide if we're in drift mode — engages aggressively
+  const handbrakeAtSpeed = handbrake && speedNow > 1;
+  if (handbrakeAtSpeed) {
+    if (carState.driftCommit <= 0 && carState.driftSign === 0) {
+      // Direction priority: explicit steering input first, then existing
+      // lateral velocity, finally pick a default. We commit to a direction
+      // even without input so the drift FIRES on every handbrake yank, not
+      // just when the user is already steering.
+      const kickDir = Math.sign(steerIn)
+        || Math.sign(latVel)
+        || (Math.random() < 0.5 ? -1 : 1);
+      // Big lateral velocity kick — instantly breaks rear loose
+      const kickStrength = Math.min(26, Math.max(10, fwdVel * 0.50));
+      latVel += kickDir * kickStrength;
+      // Total rotation budget for visible body angle
+      const totalKick = kickDir * Math.min(0.65, 0.35 + (fwdVel * 0.005));
+      // Apply 85% INSTANTLY this frame (≈30° body rotation on average) so
+      // the drift pose is visible from frame ONE. Tiny remaining drain is
+      // just a smoothing follow-through.
+      carState.heading += totalKick * 0.85;
+      carState.driftKickRemaining = totalKick * 0.15;
+      carState.driftSign = kickDir;
+    }
+    carState.driftCommit = 0.85;
+  } else {
+    carState.driftCommit = Math.max(0, (carState.driftCommit || 0) - dt);
+  }
+  const inDriftMode = carState.driftCommit > 0 && speedNow > 1;
+
+  // 2. Apply grip — different behavior in/out of drift mode
+  if (inDriftMode) {
+    // === DRIFT MODE ===
+    // Approach: don't FORCE a target lateral velocity (that made the car
+    // slide like ice without visible body rotation). Instead:
+    //   1. Apply very low grip (handbrake grip) — rear breaks free
+    //   2. Let heading rotate naturally from steering input
+    //   3. As heading rotates, world velocity stays roughly constant
+    //      but the LATERAL component grows naturally → visible slip
+    //   4. Cap the slip angle at ~32° so it doesn't spin out
+    //
+    // This produces the classic "tail kicks out, body rotates, beautiful
+    // sustained slide" feel of a real drift.
+
+    // Apply handbrake-grade grip (very loose) — let latVel decay slowly
+    const handbrakeGrip = GRIP_HANDBRAKE * gripFalloffDrift;
+    latVel *= Math.exp(-handbrakeGrip * dt);
+
+    // Lock the slide direction at drift start (prevents teleport on
+    // counter-steer when latVel crosses zero)
+    if (carState.driftSign === 0 || !carState.driftSign) {
+      const initialSign = Math.sign(latVel) || Math.sign(steerIn) || 1;
+      carState.driftSign = initialSign;
+    }
+
+    // Compute current slip angle (between forward and velocity vector)
+    const currentSlip = Math.atan2(Math.abs(latVel), Math.max(0.1, Math.abs(fwdVel)));
+    const TARGET_SLIP_ANGLE = 0.49; // ~28° (was 32° — tighter to avoid wild exits)
+
+    // COUNTER-STEER EXIT: steering opposite to slide direction ramps
+    // the cap down toward 0, naturally ending the drift.
+    const slideSign = carState.driftSign;
+    const counterSteer = steerIn * slideSign < 0
+      ? Math.min(1, Math.abs(steerIn) * 1.4) : 0;
+    const effectiveCap = TARGET_SLIP_ANGLE * (1 - counterSteer * 0.95);
+
+    // CAP: pulls hard toward limit so sustained drifts don't escalate.
+    if (currentSlip > effectiveCap) {
+      const cappedLat = slideSign * Math.tan(effectiveCap) * Math.abs(fwdVel);
+      const k = 12.0; // firmer cap (was 6.5)
+      latVel += (cappedLat - latVel) * (1 - Math.exp(-k * dt));
+    }
+
+    // Small forward bleed (real drifts lose some energy to slip)
+    fwdVel *= Math.exp(-0.25 * dt);
+
+  } else {
+    // === NORMAL DRIVING — high-speed stable cornering ===
+    if (carState.driftSign) {
+      // First frame after drift ends — kick off the smooth exit transition.
+      carState.driftExitTimer = 0.35;
+      carState.driftSign = 0;
+    }
+
+    // Smooth exit phase — for 350ms after drift ends, kill lateral velocity
+    // 3x faster than normal AND rotate heading toward motion direction.
+    // This prevents the "90° spin" feel where the car keeps sliding sideways
+    // with body offset after the drift ends.
+    if (carState.driftExitTimer > 0) {
+      carState.driftExitTimer -= dt;
+      // Aggressive lateral kill — 3x normal grip
+      const exitGrip = GRIP_NORMAL * gripFalloffNormal * 3.0;
+      latVel *= Math.exp(-exitGrip * dt);
+      // Pull heading toward motion direction
+      // Motion direction in world = atan2(carState.velocity.x, carState.velocity.z)
+      // Body forward direction = carState.heading
+      // We want body to align with motion
+      const vx = carState.velocity.x, vz = carState.velocity.z;
+      const vMag = Math.hypot(vx, vz);
+      if (vMag > 2) {
+        const motionHeading = Math.atan2(vx, vz);
+        // Shortest angular difference
+        let dH = motionHeading - carState.heading;
+        while (dH > Math.PI) dH -= 2 * Math.PI;
+        while (dH < -Math.PI) dH += 2 * Math.PI;
+        // Pull heading toward motion direction at moderate rate
+        // Stronger early in the exit, weaker as timer expires
+        const exitProgress = carState.driftExitTimer / 0.35;
+        const rotRate = 6.0 * exitProgress;
+        carState.heading += dH * (1 - Math.exp(-rotRate * dt));
+      }
+    } else {
+      const grip = GRIP_NORMAL * gripFalloffNormal;
+      latVel *= Math.exp(-grip * dt);
+    }
+    // Safety clamp: in normal mode, lateral velocity can never exceed 40% of
+    // forward speed. Prevents high-speed cornering from escalating into a spin.
+    const maxLatNormal = Math.abs(fwdVel) * 0.40;
+    if (Math.abs(latVel) > maxLatNormal) {
+      latVel = Math.sign(latVel) * maxLatNormal;
+    }
+  }
+
+  // Drift detection for HUD/audio/effects
+  const preDriftAngle = Math.atan2(Math.abs(latVel), Math.max(1, Math.abs(fwdVel)));
+  const preSpeed = Math.hypot(fwdVel, latVel);
+  const isDrifting = inDriftMode || (preDriftAngle > 0.35 && preSpeed > 8);
+
+  // ------------------------------------------------------------------
+  // ROAD-SNAP ASSIST — Asphalt-style, safe edition.
+  // Two operations, both always toward stability — never amplifying:
+  //   1. Gently rotate heading toward the road tangent.
+  //   2. Damp the component of velocity perpendicular to the road.
+  // Damping can only REDUCE lateral motion, never amplify or flip it.
+  // This avoids the slingshot/sideways-fling bugs from earlier attempts.
+  //
+  // Target tangent is smoothed frame-to-frame so sudden nearest-point
+  // jumps (when the road curves near itself) can't yank the car.
+  // ------------------------------------------------------------------
+  const handbrakeCommit = handbrake && preSpeed > 8;
+  const wantAssist = isDrifting || handbrakeCommit;
+
+  if (wantAssist && ROAD_POINTS.length) {
+    const near = nearestRoadPointAligned(
+      carState.position.x, carState.position.z,
+      _forward.x, _forward.z,
+      70
+    );
+    if (near.idx >= 0) {
+      const roadP = ROAD_POINTS[near.idx];
+      const { t: roadTan, p: roadPerp } = tanPerpAt(near.idx);
+      if (roadTan && roadP) {
+        const offX = carState.position.x - roadP.x;
+        const offZ = carState.position.z - roadP.z;
+        const lateralOffset = offX * roadPerp.x + offZ * roadPerp.z;
+        const absOff = Math.abs(lateralOffset);
+
+        // Off-road kill switch — assist fades out past the road edge
+        const onRoadFactor = THREE.MathUtils.clamp(
+          1 - (absOff - ROAD_HALF) / 6,
+          0, 1
+        );
+
+        if (onRoadFactor > 0) {
+          // Smooth the target tangent across frames so sudden jumps in the
+          // "nearest road point" don't cause velocity slingshots.
+          const tanHeading = Math.atan2(roadTan.x, roadTan.z);
+          if (assistTangentSmoothed === null) {
+            assistTangentSmoothed = tanHeading;
+          } else {
+            // Smooth via shortest angle
+            const dT = angleDelta(tanHeading, assistTangentSmoothed);
+            // Reject huge jumps (>90°): keep previous, don't follow
+            if (Math.abs(dT) < Math.PI / 2) {
+              assistTangentSmoothed += dT * (1 - Math.exp(-6 * dt));
+            } else {
+              // Big jump means the assist grabbed a different segment — reset
+              assistTangentSmoothed = tanHeading;
+            }
+          }
+          const safeTanHeading = assistTangentSmoothed;
+
+          // -- HEADING ROTATION --
+          // Normal driving: gentle pull toward road tangent (helps cars track straights).
+          // Drift: stronger pull toward road tangent, but ONLY when the player's
+          //   steering direction matches the road's curve. If the player steers
+          //   away (different line) or counter-steers (exiting), the assist
+          //   disengages and the player has full control of heading.
+          const dH = angleDelta(safeTanHeading, carState.heading);
+          if (Math.abs(dH) < Math.PI * 0.6) {
+            let headingK = 0;
+            if (inDriftMode) {
+              // Compute road's curve direction by sampling the tangent ahead
+              const ahead = Math.min(nextChunkIdx - 1, near.idx + 8);
+              const tahead = tanPerpAt(ahead);
+              if (tahead.t) {
+                const tanAheadAngle = Math.atan2(tahead.t.x, tahead.t.z);
+                // Positive = road curving left (heading +), negative = right
+                const roadCurveDir = Math.sign(angleDelta(tanAheadAngle, safeTanHeading));
+                // Player's steering direction: + steerIn = left, - = right (positive steerIn rotates heading +)
+                const playerSteerDir = Math.sign(steerIn);
+                // If steering matches corner direction (and is non-trivial), assist
+                // Lower threshold + stronger multiplier so assist engages earlier
+                const commitment = (roadCurveDir !== 0 && playerSteerDir === roadCurveDir)
+                  ? Math.min(1, Math.abs(steerIn) * 2.0)
+                  : 0;
+                headingK = commitment * 7.0 * onRoadFactor;
+              }
+            } else {
+              headingK = 2.4 * onRoadFactor;
+            }
+            if (headingK > 0) {
+              carState.heading += dH * (1 - Math.exp(-headingK * dt));
+            }
+          }
+
+          // -- LATERAL VELOCITY DAMPING (safety) --
+          // Still applies during drift, but only as a safety against
+          // flying off the road completely. Damps the perpendicular
+          // velocity ONLY when it points away from centerline. Can never
+          // amplify velocity or push the car toward the centerline against
+          // the player's intent.
+          const vWorldX = _forward.x * fwdVel + _right.x * latVel;
+          const vWorldZ = _forward.z * fwdVel + _right.z * latVel;
+          const tx = Math.sin(safeTanHeading), tz = Math.cos(safeTanHeading);
+          const px = -tz, pz = tx;
+          const vAlongTan  = vWorldX * tx + vWorldZ * tz;
+          const vPerpToRoad= vWorldX * px + vWorldZ * pz;
+
+          const perpAwayFromCenter = (Math.sign(lateralOffset) === Math.sign(vPerpToRoad)) ? 1 : 0;
+          // Lighter damping during drift (so the car can still travel laterally
+          // for drift width); stronger when not drifting (helps recover).
+          const dampingK = inDriftMode ? 1.2 : 2.5;
+          const dampedPerp = perpAwayFromCenter
+            ? vPerpToRoad * Math.exp(-dampingK * onRoadFactor * dt)
+            : vPerpToRoad;
+
+          const newVx = vAlongTan * tx + dampedPerp * px;
+          const newVz = vAlongTan * tz + dampedPerp * pz;
+
+          setBodyAxes(carState.heading);
+          fwdVel = newVx * _forward.x + newVz * _forward.z;
+          latVel = newVx * _right.x   + newVz * _right.z;
+        }
+      }
+    } else {
+      assistTangentSmoothed = null; // reset when no road found
+    }
+  } else {
+    assistTangentSmoothed = null; // reset when assist disengages
+  }
+  // ------------------------------------------------------------------
+
+  setBodyAxes(carState.heading); // refresh after snap
+  carState.velocity.copy(_forward).multiplyScalar(fwdVel).addScaledVector(_right, latVel);
+
+  const speedAbs = Math.abs(fwdVel) + Math.abs(latVel) * 0.4;
+  const speedFactor = Math.max(STEER_FACTOR_MIN, Math.min(1.0, speedAbs / 12));
+  const moveSign = fwdVel >= 0 ? 1 : -1;
+  // During drift, rear is loose — car pivots ~50% more responsively
+  const driftBonus = inDriftMode ? 1.55 : 1.0;
+  carState.heading += steerIn * STEER_RATE * speedFactor * driftBonus * dt * moveSign;
+
+  // Drain the drift kick budget — applies smoothly over ~55ms (3-4 frames).
+  // Feels immediate but isn't a 1-frame teleport.
+  if (carState.driftKickRemaining) {
+    const drainRate = 18.0;  // 1/0.056s — full kick consumed in ~55ms
+    const drainStep = carState.driftKickRemaining * Math.min(1, dt * drainRate);
+    carState.heading += drainStep;
+    carState.driftKickRemaining -= drainStep;
+    if (Math.abs(carState.driftKickRemaining) < 0.005) carState.driftKickRemaining = 0;
+  }
+
+  const targetSteer = steerIn * 0.5;
+  carState.steerAngle += (targetSteer - carState.steerAngle) * Math.min(1, dt * 9);
+
+  carState.position.addScaledVector(carState.velocity, dt);
+
+  // -- ROAD ELEVATION FOLLOWING --
+  // For fixed-loop tracks with elevation (bridges), interpolate car Y from
+  // the nearest road point's Y. Smooth so transitions are gentle.
+  if (CURRENT_MAP && CURRENT_MAP.type === 'fixed_loop' && ROAD_POINTS.length) {
+    const roadP = ROAD_POINTS[carRoadIdx];
+    if (roadP) {
+      const targetY = roadP.y;
+      // Smooth approach to target Y at ~8 m/s
+      const dy = targetY - carState.position.y;
+      carState.position.y += dy * Math.min(1, dt * 8);
+    }
+  } else {
+    carState.position.y = 0;
+  }
+
+  // -- OFF-ROAD FRICTION (grass/gravel beyond asphalt edge) --
+  // Two regimes:
+  //   - Slight overshoot (just outer wheels off): light drag, easy to recover
+  //   - More than 2 wheels off + fast: car loses grip and gets pulled outward
+  //     toward the barrier, simulating real grass at speed
+  if (BARRIERS.enabled && ROAD_POINTS.length) {
+    const idx = carRoadIdx;
+    const roadP = ROAD_POINTS[idx];
+    if (roadP && tanPerpAtInto(idx, _barrierTan, _barrierPerp)) {
+      const offX = carState.position.x - roadP.x;
+      const offZ = carState.position.z - roadP.z;
+      const lateralOffset = offX * _barrierPerp.x + offZ * _barrierPerp.z;
+      const absOff = Math.abs(lateralOffset);
+      if (absOff > ROAD_HALF) {
+        const sign = Math.sign(lateralOffset);
+        const overshoot = absOff - ROAD_HALF;
+        const depth = Math.min(1, overshoot / 3.5);
+        // Base drag — always applied off-road
+        fwdVel *= Math.exp(-2.5 * depth * depth * dt);
+        latVel *= Math.exp(-1.5 * depth * dt);
+
+        // SEVERE off-road regime: more than half the car off + going fast +
+        // ACTIVELY changing direction (steering input). Driving straight on
+        // grass just slows you down — you only lose control when you try to
+        // turn.
+        const carHalfWidth = 1.0;
+        const speed = Math.hypot(fwdVel, latVel);
+        const isChangingDirection = Math.abs(steerIn) > 0.1;
+        if (overshoot > carHalfWidth && speed > 22 && isChangingDirection) {
+          const tearFrac = Math.min(1, (overshoot - carHalfWidth) / 0.8)
+                         * Math.min(1, (speed - 22) / 12)
+                         * Math.min(1, Math.abs(steerIn) * 1.5);  // scales with steering effort
+          fwdVel *= Math.exp(-9.0 * tearFrac * dt);
+          // Outward sling — car gets thrown to the barrier
+          const outwardPush = 55 * tearFrac * dt;
+          carState.velocity.x += _barrierPerp.x * sign * outwardPush;
+          carState.velocity.z += _barrierPerp.z * sign * outwardPush;
+          // Lateral velocity destabilizes — back end lets go
+          const slipSign = Math.sign(latVel) || sign;
+          latVel += slipSign * 18 * tearFrac * dt;
+
+          // THROTTLE+STEERING ON GRASS = SPIN. Direction follows steering input
+          // (turning into the corner you tried to make, but the grass amplifies).
+          if (throttle) {
+            const spinTorque = 5.5 * tearFrac;
+            // Spin in the direction the player tried to steer — amplified
+            carState.heading += Math.sign(steerIn) * spinTorque * dt;
+            carState.driftCommit = Math.max(carState.driftCommit || 0, 0.4);
+            carState.driftSign = sign;
+          }
+        }
+      }
+    }
+  }
+
+  // -- BARRIER COLLISION (speed-scaled punishment) --
+  if (BARRIERS.enabled && ROAD_POINTS.length) {
+    const idx = carRoadIdx;
+    const roadP = ROAD_POINTS[idx];
+    if (roadP && tanPerpAtInto(idx, _barrierTan, _barrierPerp)) {
+      const tan = _barrierTan, perp = _barrierPerp;
+      const offX = carState.position.x - roadP.x;
+      const offZ = carState.position.z - roadP.z;
+      const lateralOffset = offX * perp.x + offZ * perp.z;
+      // Use the actual saved barrier position on the side the car is on, so
+      // the physics limit matches the visible barrier even where it varies.
+      const sign = Math.sign(lateralOffset);
+      const bp = BARRIERS.points[idx];
+      let limit = BARRIER_OFFSET;
+      if (bp) {
+        const bx = sign > 0 ? bp.leftX  : bp.rightX;
+        const bz = sign > 0 ? bp.leftZ  : bp.rightZ;
+        if (bx !== undefined && bz !== undefined && bx !== null && bz !== null) {
+          const dx = bx - roadP.x, dz = bz - roadP.z;
+          limit = Math.abs(dx * perp.x + dz * perp.z);
+        }
+      }
+      if (Math.abs(lateralOffset) > limit) {
+        const correction = (Math.abs(lateralOffset) - limit) * sign;
+        carState.position.x -= perp.x * correction;
+        carState.position.z -= perp.z * correction;
+        const vx = carState.velocity.x, vz = carState.velocity.z;
+        const vAlong = vx * tan.x + vz * tan.z;
+        const vPerp  = vx * perp.x + vz * perp.z;
+        if (Math.sign(vPerp) === sign) {
+          const normalImpact = Math.abs(vPerp);
+          const impactFrac = Math.max(0, Math.min(1, (normalImpact - 5) / 13));
+          const newPerp = -vPerp * 0.4;
+          const speedKeep = 0.98 - impactFrac * 0.68;
+          const newAlong = vAlong * speedKeep;
+          const newVx = newAlong * tan.x + newPerp * perp.x;
+          const newVz = newAlong * tan.z + newPerp * perp.z;
+          carState.velocity.x = newVx;
+          carState.velocity.z = newVz;
+          fwdVel = newAlong * (_forward.x * tan.x + _forward.z * tan.z) +
+                   newPerp  * (_forward.x * perp.x + _forward.z * perp.z);
+          latVel = newAlong * (_right.x * tan.x + _right.z * tan.z) +
+                   newPerp  * (_right.x * perp.x + _right.z * perp.z);
+        }
+      }
+    }
+  }
+
+  // Gear + RPM
+  const wheelRpm = (Math.abs(fwdVel) / (2 * Math.PI * WHEEL_RADIUS)) * 60;
+  let targetRpm = wheelRpm * FINAL_DRIVE * GEAR_RATIOS[carState.gear - 1];
+
+  // Upshift on redline
+  if (targetRpm > RPM_SHIFT_UP && carState.gear < GEAR_RATIOS.length && !shifting) {
+    carState.gear++;
+    carState.shiftTimer = SHIFT_DURATION;
+    carState.shiftDirection = 1;
+    targetRpm = wheelRpm * FINAL_DRIVE * GEAR_RATIOS[carState.gear - 1];
+  }
+  // Downshift — happens early now (4500 rpm). When braking hard, we also
+  // aggressively pre-downshift to keep RPM in the powerband for the exit.
+  else if (carState.gear > 1 && !shifting) {
+    const brakeForceDown = brake && carState.gear > 2;
+    const downshiftThreshold = brakeForceDown ? 5800 : RPM_SHIFT_DOWN;
+    if (targetRpm < downshiftThreshold) {
+      carState.gear--;
+      carState.shiftTimer = SHIFT_DURATION * 0.7;
+      carState.shiftDirection = -1;
+      targetRpm = wheelRpm * FINAL_DRIVE * GEAR_RATIOS[carState.gear - 1];
+    }
+  }
+
+  if (throttle && targetRpm < 2200) targetRpm = 2200 + Math.random() * 200;
+  targetRpm = Math.max(RPM_IDLE, Math.min(RPM_REDLINE, targetRpm));
+  const rpmK = shifting ? 15 : 7;
+  carState.rpm += (targetRpm - carState.rpm) * (1 - Math.exp(-rpmK * dt));
+
+  const finalDriftAngle = Math.atan2(Math.abs(latVel), Math.max(1, Math.abs(fwdVel)));
+  const speed = carState.velocity.length();
+  const finalDrift = finalDriftAngle > 0.35 && speed > 8;
+  if (finalDrift) carState.driftTime += dt;
+  else            carState.driftTime = Math.max(0, carState.driftTime - dt * 1.8);
+
+  return { fwdVel, latVel, speed, isDrifting: finalDrift, throttle, brake, handbrake,
+           driftAngle: finalDriftAngle };
+}
+
+// ====================================================================
+//  AUDIO — engine via cylinder firing pulses + exhaust resonator.
+//  Skid via high-band noise with rapid AM modulation (the "skreee" stutter).
+// ====================================================================
+const audio = {
+  ctx: null, master: null, started: false,
+  engine: null, skid: null,
+  // MP3 samples
+  bgm: null,           // { source, gain } — loops nonstop
+  driftSample: null,   // { source, gain } — looped while drifting
+  engineStartBuf: null, // AudioBuffer for one-shot engine start
+  buffersLoaded: false,
+};
+
+// Helper: fetch an MP3 and decode to an AudioBuffer
+async function loadAudioBuffer(ctx, url) {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error('fetch failed: ' + res.status);
+    const arr = await res.arrayBuffer();
+    return await new Promise((resolve, reject) => {
+      ctx.decodeAudioData(arr, resolve, reject);
+    });
+  } catch (e) {
+    console.warn('Audio load failed for', url, e);
+    return null;
+  }
+}
+
+// ENGINE_CYLINDERS is per-car, set by applyCar() above
+
+function initAudio() {
+  if (audio.started) return;
+  audio.started = true;
+  const AC = window.AudioContext || window.webkitAudioContext;
+  if (!AC) return;
+  audio.ctx = new AC();
+  audio.master = audio.ctx.createGain();
+  audio.master.gain.value = 0.55;
+  audio.master.connect(audio.ctx.destination);
+  // Chrome creates AudioContext in suspended state even after a user gesture.
+  // Resume immediately, and re-resume on any subsequent interaction.
+  audio.ctx.resume().catch(() => {});
+  const resumeAudio = () => {
+    if (audio.ctx && audio.ctx.state === 'suspended') audio.ctx.resume().catch(() => {});
+  };
+  document.addEventListener('click', resumeAudio);
+  document.addEventListener('keydown', resumeAudio);
+
+  const sr = audio.ctx.sampleRate;
+
+  // ----- ENGINE PULSE TRAIN -----
+  // Real engines fire cylinders at (RPM * cylinders) / 120 Hz.
+  // We synthesize a stream of short impulses, then filter through a
+  // tuned resonator (modeling the exhaust pipe). This is what gives
+  // engines their characteristic rumble — pure tones sound alien.
+  const PULSE_BASE_HZ = 100;
+  const PULSE_PERIOD_SAMPLES = Math.round(sr / PULSE_BASE_HZ);
+  const PULSE_BUFFER_LEN = PULSE_PERIOD_SAMPLES * 8;
+  const pulseBuf = audio.ctx.createBuffer(1, PULSE_BUFFER_LEN, sr);
+  {
+    const d = pulseBuf.getChannelData(0);
+    for (let p = 0; p < 8; p++) {
+      const offset = p * PULSE_PERIOD_SAMPLES;
+      // Slight per-firing variation so it doesn't sound mechanical
+      const amp = 0.85 + Math.random() * 0.15;
+      for (let i = 0; i < PULSE_PERIOD_SAMPLES; i++) {
+        const t = i / PULSE_PERIOD_SAMPLES;
+        const env = Math.exp(-t * 25) * amp;
+        d[offset + i] = env * (1 + 0.4 * Math.sin(t * 80)) - 0.3 * env;
+      }
+    }
+  }
+  const pulse = audio.ctx.createBufferSource();
+  pulse.buffer = pulseBuf; pulse.loop = true; pulse.start();
+
+  // Resonators — model the exhaust pipe + chamber resonances
+  const reso1 = audio.ctx.createBiquadFilter();
+  reso1.type = 'bandpass'; reso1.frequency.value = 220; reso1.Q.value = 8;
+  const reso2 = audio.ctx.createBiquadFilter();
+  reso2.type = 'peaking'; reso2.frequency.value = 600; reso2.Q.value = 3; reso2.gain.value = 6;
+  const lp = audio.ctx.createBiquadFilter();
+  lp.type = 'lowpass'; lp.frequency.value = 2200; lp.Q.value = 0.7;
+
+  const engineGain = audio.ctx.createGain();
+  engineGain.gain.value = 0.0;
+
+  pulse.connect(reso1);
+  reso1.connect(reso2);
+  reso2.connect(lp);
+  lp.connect(engineGain);
+  engineGain.connect(audio.master);
+
+  // ----- INTAKE / TURBULENCE -----
+  // Adds the "roar" under heavy throttle
+  const intakeBuf = audio.ctx.createBuffer(1, sr * 2, sr);
+  {
+    const d = intakeBuf.getChannelData(0);
+    let last = 0;
+    for (let i = 0; i < d.length; i++) {
+      const w = Math.random() * 2 - 1;
+      last = 0.85 * last + 0.15 * w; // brownish
+      d[i] = last * 2.2;
+    }
+  }
+  const intake = audio.ctx.createBufferSource();
+  intake.buffer = intakeBuf; intake.loop = true; intake.start();
+  const intakeFilt = audio.ctx.createBiquadFilter();
+  intakeFilt.type = 'bandpass'; intakeFilt.frequency.value = 350; intakeFilt.Q.value = 1.4;
+  const intakeGain = audio.ctx.createGain();
+  intakeGain.gain.value = 0;
+  intake.connect(intakeFilt);
+  intakeFilt.connect(intakeGain);
+  intakeGain.connect(audio.master);
+
+  audio.engine = {
+    pulse, reso1, reso2, lp, gain: engineGain,
+    intake, intakeFilt, intakeGain,
+    PULSE_BASE_HZ,
+  };
+
+  // ----- SKID / TIRE SCREECH -----
+  // High bandpass + an LFO that modulates amplitude rapidly (~22 Hz).
+  // The AM gives the "skreee-skreee" stutter that distinguishes screech
+  // from smooth hiss (which sounds like sand or wind).
+  const skidNoiseBuf = audio.ctx.createBuffer(1, sr * 2, sr);
+  {
+    const d = skidNoiseBuf.getChannelData(0);
+    for (let i = 0; i < d.length; i++) d[i] = Math.random() * 2 - 1;
+  }
+  const skidNoise = audio.ctx.createBufferSource();
+  skidNoise.buffer = skidNoiseBuf; skidNoise.loop = true; skidNoise.start();
+
+  const skidHP = audio.ctx.createBiquadFilter();
+  skidHP.type = 'highpass'; skidHP.frequency.value = 1800; skidHP.Q.value = 0.7;
+  const skidBP = audio.ctx.createBiquadFilter();
+  skidBP.type = 'bandpass'; skidBP.frequency.value = 3000; skidBP.Q.value = 4;
+  const skidPK = audio.ctx.createBiquadFilter();
+  skidPK.type = 'peaking'; skidPK.frequency.value = 4500; skidPK.Q.value = 3.5; skidPK.gain.value = 14;
+
+  const skidLFO = audio.ctx.createOscillator();
+  skidLFO.type = 'sine'; skidLFO.frequency.value = 22;
+  const skidLFOGain = audio.ctx.createGain();
+  skidLFOGain.gain.value = 0;
+
+  const skidGain = audio.ctx.createGain();
+  skidGain.gain.value = 0.0;
+
+  skidLFO.connect(skidLFOGain);
+  skidLFOGain.connect(skidGain.gain); // LFO adds to base gain → AM modulation
+  skidLFO.start();
+
+  skidNoise.connect(skidHP);
+  skidHP.connect(skidBP);
+  skidBP.connect(skidPK);
+  skidPK.connect(skidGain);
+  skidGain.connect(audio.master);
+
+  audio.skid = { source: skidNoise, gain: skidGain, lfo: skidLFO, lfoGain: skidLFOGain };
+
+  // Apply the current car's engine sound profile to the audio nodes.
+  // After this, the engine has the right timbre even before any RPM changes.
+  applyEngineSound();
+
+  // -- Load MP3 samples asynchronously --
+  // BGM, drift sample, and engine start. The synth keeps running as a
+  // fallback in case any sample fails to load. When drift sample loads,
+  // it mutes the synth skid and replaces it.
+  loadSamplesAndStart();
+}
+
+async function loadSamplesAndStart() {
+  if (!audio.ctx) return;
+  const ctx = audio.ctx;
+
+  // Load all three samples in parallel
+  const [bgmBuf, driftBuf, engineStartBuf] = await Promise.all([
+    loadAudioBuffer(ctx, 'bgm.mp3'),
+    loadAudioBuffer(ctx, 'drift.mp3'),
+    loadAudioBuffer(ctx, 'engine_start.mp3'),
+  ]);
+
+  // -- BGM — looped, sits under the game audio --
+  if (bgmBuf) {
+    const src = ctx.createBufferSource();
+    src.buffer = bgmBuf;
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = 0; // fade in
+    src.connect(g);
+    g.connect(audio.master);
+    src.start();
+    // Smooth fade-in over 2s
+    g.gain.linearRampToValueAtTime(0.32, ctx.currentTime + 2.0);
+    audio.bgm = { source: src, gain: g };
+  }
+
+  // -- Drift sample — looped, gain modulated by drift state --
+  if (driftBuf) {
+    const src = ctx.createBufferSource();
+    src.buffer = driftBuf;
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = 0;
+    src.connect(g);
+    g.connect(audio.master);
+    src.start();
+    audio.driftSample = { source: src, gain: g };
+    // Replace synth skid with the sample — mute the synth path entirely
+    if (audio.skid && audio.skid.gain) {
+      audio.skid.gain.gain.value = 0;
+      audio.skid.lfoGain.gain.value = 0;
+      audio.skid.replacedBySample = true;
+    }
+  }
+
+  // -- Engine start — one-shot, played now (game just started) --
+  if (engineStartBuf) {
+    audio.engineStartBuf = engineStartBuf;
+    playEngineStart();
+  }
+
+  audio.buffersLoaded = true;
+
+  // -- Per-car engine sample loops (optional) --
+  // Try to load engine_<carId>.mp3 for each car (e.g. engine_gt3rs.mp3).
+  // If a sample loads, it gets pitch-shifted with RPM via playbackRate.
+  // Cars without samples keep using the synth.
+  // To add a real engine sound for any car: drop the mp3 next to bgm.mp3.
+  audio.engineSamples = {}; // { carId: { buffer, source, gain, baseRpm } }
+  for (const car of CARS) {
+    const buf = await loadAudioBuffer(ctx, `engine_${car.id}.mp3`);
+    if (!buf) continue;
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+    src.loop = true;
+    const g = ctx.createGain();
+    g.gain.value = 0; // silent until this car is selected
+    src.connect(g);
+    g.connect(audio.master);
+    src.start();
+    // baseRpm = RPM at which the recording was made. Default = car's redline × 0.4
+    // (most engine loop recordings are mid-RPM cruising). Override per-car if needed.
+    audio.engineSamples[car.id] = {
+      buffer: buf, source: src, gain: g,
+      baseRpm: car.engineSampleBaseRpm || (car.rpmRedline * 0.4),
+    };
+  }
+  // Apply the current car's engine source choice
+  applyEngineSound();
+}
+
+function playEngineStart() {
+  if (!audio.ctx || !audio.engineStartBuf) return;
+  const ctx = audio.ctx;
+  const src = ctx.createBufferSource();
+  src.buffer = audio.engineStartBuf;
+  const g = ctx.createGain();
+  g.gain.value = 0.55;
+  src.connect(g);
+  g.connect(audio.master);
+  src.start();
+}
+
+// Push the current car's engine sound profile to the live audio nodes.
+// Sets baseline frequencies, Q values, and gain coefficients per-car.
+// Also handles switching between synth engine and per-car sample loops.
+// Safe to call before audio is initialized (no-ops in that case).
+function applyEngineSound() {
+  if (!audio.started || !audio.engine || !CURRENT_CAR) return;
+  const p = CURRENT_CAR.engineSound;
+  const e = audio.engine;
+
+  if (p) {
+    // Set Q values immediately (no smoothing — these are timbre-defining)
+    e.reso1.Q.value = p.reso1Q;
+    e.reso2.Q.value = p.reso2Q;
+    e.reso2.gain.value = p.reso2Gain;
+    e.intakeFilt.Q.value = p.intakeQ;
+    e.profile = p;
+  }
+
+  // If we have engine samples loaded, switch between synth and sample for the current car
+  if (audio.engineSamples) {
+    const carId = CURRENT_CAR.id;
+    const hasSample = !!audio.engineSamples[carId];
+
+    // Mute all engine sample gains first
+    for (const id in audio.engineSamples) {
+      audio.engineSamples[id].gain.gain.value = 0;
+    }
+
+    if (hasSample) {
+      // Use sample for this car — mute synth
+      e.gain.gain.value = 0;
+      e.intakeGain.gain.value = 0;
+      e.useSample = true;
+      e.activeSampleId = carId;
+    } else {
+      // No sample for this car — use synth (it will ramp via updateAudio)
+      e.useSample = false;
+      e.activeSampleId = null;
+    }
+  }
+}
+
+// Short percussive "thunk" for each gear shift.
+function playShiftThunk(direction) {
+  if (!audio.started || !audio.ctx) return;
+  const ctx = audio.ctx;
+  const now = ctx.currentTime;
+
+  const osc = ctx.createOscillator();
+  osc.type = 'sine';
+  const startFreq = direction > 0 ? 160 : 110;
+  osc.frequency.setValueAtTime(startFreq, now);
+  osc.frequency.exponentialRampToValueAtTime(startFreq * 0.45, now + 0.18);
+
+  const gain = ctx.createGain();
+  gain.gain.setValueAtTime(0.0, now);
+  gain.gain.linearRampToValueAtTime(0.35, now + 0.008);
+  gain.gain.exponentialRampToValueAtTime(0.001, now + 0.22);
+
+  osc.connect(gain);
+  gain.connect(audio.master);
+  osc.start(now);
+  osc.stop(now + 0.25);
+
+  const sr = ctx.sampleRate;
+  const buf = ctx.createBuffer(1, Math.floor(sr * 0.06), sr);
+  const d = buf.getChannelData(0);
+  for (let i = 0; i < d.length; i++) {
+    const t = i / d.length;
+    d[i] = (Math.random() * 2 - 1) * Math.exp(-t * 18);
+  }
+  const click = ctx.createBufferSource();
+  click.buffer = buf;
+  const clickFilt = ctx.createBiquadFilter();
+  clickFilt.type = 'bandpass';
+  clickFilt.frequency.value = direction > 0 ? 2400 : 1400;
+  clickFilt.Q.value = 1.5;
+  const clickGain = ctx.createGain();
+  clickGain.gain.value = direction > 0 ? 0.18 : 0.12;
+  click.connect(clickFilt);
+  clickFilt.connect(clickGain);
+  clickGain.connect(audio.master);
+  click.start(now);
+}
+
+// Default engine sound profile — used if a car doesn't define one.
+// Hoisted to module scope so updateAudio() doesn't allocate per frame.
+const _defaultEngineProfile = {
+  reso1Base: 180, reso1Top: 460,
+  reso2Base: 550, reso2Top: 1250,
+  lpBase: 1400, lpTop: 4400,
+  intakeBase: 280, intakeTop: 880, intakeGainMul: 0.18,
+  engineGainMul: 1.0, throttleBonus: 0.18,
+};
+
+function updateAudio(dt, phys) {
+  if (!audio.started || !audio.ctx) return;
+  const now = audio.ctx.currentTime;
+
+  const rpmFrac = Math.max(0, Math.min(1, (carState.rpm - RPM_IDLE) / (RPM_REDLINE - RPM_IDLE)));
+
+  // -- SAMPLE MODE: pitch-shift the loaded engine sample with RPM --
+  if (audio.engine.useSample && audio.engine.activeSampleId) {
+    const sample = audio.engineSamples[audio.engine.activeSampleId];
+    if (sample) {
+      // Playback rate = current RPM / recorded RPM. Clamp to reasonable range.
+      const targetRate = Math.max(0.4, Math.min(2.5, carState.rpm / sample.baseRpm));
+      sample.source.playbackRate.setTargetAtTime(targetRate, now, 0.05);
+      // Volume curve — quieter at idle, full at high RPM, throttle bonus
+      const throttleBonus = phys.throttle ? 0.15 : 0;
+      const targetGain = 0.25 + rpmFrac * 0.45 + throttleBonus;
+      sample.gain.gain.setTargetAtTime(targetGain, now, 0.05);
+    }
+    // Skip the synth update path entirely
+    return updateAudioSkidOnly(now, phys);
+  }
+
+  // -- SYNTH MODE (fallback when no sample loaded) --
+  // Engine pulse rate = (RPM × cylinders) / 120 Hz
+  const firingHz = (carState.rpm * ENGINE_CYLINDERS) / 120;
+  const targetRate = firingHz / audio.engine.PULSE_BASE_HZ;
+  audio.engine.pulse.playbackRate.setTargetAtTime(targetRate, now, 0.04);
+
+  // Per-car profile (set by applyEngineSound). Fall back to module-scope default.
+  const p = audio.engine.profile || _defaultEngineProfile;
+
+  // Resonator sweep — each car has its own characteristic frequency range
+  audio.engine.reso1.frequency.setTargetAtTime(p.reso1Base + rpmFrac * (p.reso1Top - p.reso1Base), now, 0.05);
+  audio.engine.reso2.frequency.setTargetAtTime(p.reso2Base + rpmFrac * (p.reso2Top - p.reso2Base), now, 0.06);
+  audio.engine.lp.frequency.setTargetAtTime(p.lpBase + rpmFrac * (p.lpTop - p.lpBase), now, 0.08);
+
+  // Engine gain — throttle gives the engaged "growl", scaled per-car
+  const throttleBonus = phys.throttle ? p.throttleBonus : 0;
+  let targetEngineGain = (0.20 + rpmFrac * 0.35 + throttleBonus) * p.engineGainMul;
+
+  // Power cut during shift — quick dip (clutch out feel)
+  if (carState.shiftTimer > 0) targetEngineGain *= 0.35;
+  audio.engine.gain.gain.setTargetAtTime(targetEngineGain, now, 0.05);
+
+  // Intake roar — turbo cars have more, NA less
+  const intakeTarget = (phys.throttle ? rpmFrac : rpmFrac * 0.22) * p.intakeGainMul;
+  audio.engine.intakeGain.gain.setTargetAtTime(intakeTarget, now, 0.08);
+  audio.engine.intakeFilt.frequency.setTargetAtTime(p.intakeBase + rpmFrac * (p.intakeTop - p.intakeBase), now, 0.08);
+
+  // ----- SKID -----
+  updateAudioSkidOnly(now, phys);
+}
+
+function updateAudioSkidOnly(now, phys) {
+  const handbrakeAtSpeed = keys.Space && phys.speed > 6;
+  let skidTarget = 0;
+  if (phys.isDrifting) {
+    const intensity = Math.min(1, (phys.driftAngle - 0.35) / 0.6);
+    skidTarget = 0.32 + intensity * 0.50;
+  } else if (handbrakeAtSpeed) {
+    skidTarget = 0.22;
+  }
+
+  if (audio.driftSample) {
+    // Real sample is loaded — use it. Convert skidTarget (0..0.85) to a gain.
+    audio.driftSample.gain.gain.setTargetAtTime(
+      skidTarget * 0.7,
+      now,
+      skidTarget > 0 ? 0.04 : 0.18
+    );
+  } else if (audio.skid && !audio.skid.replacedBySample) {
+    // Sample not loaded yet — use the synth fallback
+    audio.skid.lfoGain.gain.setTargetAtTime(skidTarget * 0.5, now, 0.04);
+    audio.skid.gain.gain.setTargetAtTime(skidTarget * 0.5, now, skidTarget > 0 ? 0.04 : 0.18);
+    audio.skid.lfo.frequency.setTargetAtTime(18 + skidTarget * 12, now, 0.1);
+  }
+}
+
+// ====================================================================
+//  TIRE SMOKE
+// ====================================================================
+const SMOKE_MAX = 380;
+const smokePool = [];
+const smokeActive = [];
+const smokeGeo = new THREE.SphereGeometry(0.32, 6, 6);
+
+function smokeGet() {
+  if (smokePool.length) return smokePool.pop();
+  return new THREE.Mesh(
+    smokeGeo,
+    new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })
+  );
+}
+function spawnSmoke(pos, intensity) {
+  if (smokeActive.length >= SMOKE_MAX) return;
+  const m = smokeGet();
+  m.position.copy(pos);
+  m.position.x += (Math.random() - 0.5) * 0.4;
+  m.position.z += (Math.random() - 0.5) * 0.4;
+  m.material.color.setHSL(0.08, 0.25, 0.78 + Math.random() * 0.1);
+  m.material.opacity = 0.55 + intensity * 0.25;
+  const life = 1.2 + Math.random() * 0.8;
+  m.userData.life = life;
+  m.userData.maxLife = life;
+  m.userData.vy = 0.35 + Math.random() * 0.5;
+  m.userData.vx = (Math.random() - 0.5) * 0.8;
+  m.userData.vz = (Math.random() - 0.5) * 0.8;
+  m.userData.scale0 = 0.45 + Math.random() * 0.25;
+  m.scale.setScalar(m.userData.scale0);
+  scene.add(m);
+  smokeActive.push(m);
+}
+function updateSmoke(dt) {
+  for (let i = smokeActive.length - 1; i >= 0; i--) {
+    const p = smokeActive[i];
+    p.userData.life -= dt;
+    if (p.userData.life <= 0) {
+      scene.remove(p);
+      smokeActive.splice(i, 1);
+      smokePool.push(p);
+      continue;
+    }
+    p.position.x += p.userData.vx * dt;
+    p.position.y += p.userData.vy * dt;
+    p.position.z += p.userData.vz * dt;
+    p.userData.vy *= 0.96;
+    p.userData.vx *= 0.94;
+    p.userData.vz *= 0.94;
+    const t = p.userData.life / p.userData.maxLife;
+    p.material.opacity = t * 0.7;
+    p.scale.setScalar(p.userData.scale0 * (1 + (1 - t) * 2.4));
+  }
+}
+
+// ====================================================================
+//  CAMERA
+// ====================================================================
+const VIEW_MODES = ['CHASE', 'HOOD', 'DRIVER', 'CINEMATIC', 'RACE_CAM'];
+let viewIndex = 0;
+function cycleView() {
+  viewIndex = (viewIndex + 1) % VIEW_MODES.length;
+  // Reset race cam state when switching INTO it so it picks a fresh angle
+  if (VIEW_MODES[viewIndex] === 'RACE_CAM') raceCamState.needsNewShot = true;
+}
+
+const _tmpPos  = new THREE.Vector3();
+const _tmpLook = new THREE.Vector3();
+// Separate scratch for drift cam so view + drift can both be live without
+// clones — eliminates ~240 Vector3 allocations/sec from hot path.
+const _driftPos  = new THREE.Vector3();
+const _driftLook = new THREE.Vector3();
+const _viewCamResult  = { pos: _tmpPos,   look: _tmpLook,   fov: 0, fovSpeedAdd: 0 };
+const _driftCamResult = { pos: _driftPos, look: _driftLook, fov: 0 };
+
+// === RACE CAM STATE ===
+// TV-style cinematic: place a virtual camera alongside the road,
+// watch the car approach + pass, then cut to a new shot.
+const raceCamState = {
+  needsNewShot: true,
+  shotStartTime: 0,         // performance.now() in ms
+  camPos: new THREE.Vector3(),
+  camLookOffset: new THREE.Vector3(),  // small offset from car (so look point can lead/lag the car)
+  shotDirection: 1,         // which side of road the camera was placed (sign)
+  shotAheadDistance: 0,     // how far ahead of the car along the road the cam was placed
+  // Used to decide when to cut: how far has the car traveled past the cam point?
+  shotCamRoadIdx: 0,        // road index where the cam is placed
+};
+
+function pickNewRaceShot() {
+  const now = performance.now();
+  raceCamState.shotStartTime = now;
+  // Place the cam ahead of the car along the road, at varying distances for variety
+  const aheadOptions = [22, 35, 50, 70, 90];
+  const ahead = aheadOptions[Math.floor(Math.random() * aheadOptions.length)];
+  // Pick which side of the road (alternates with a bit of randomness)
+  const side = Math.random() < 0.5 ? 1 : -1;
+  // Side offset varies — from very close (3m) for low-angle dramatic shots
+  // to far back (18m) for wide cinematic shots
+  const sideOffOptions = [3, 5, 8, 12, 18];
+  const sideOff = sideOffOptions[Math.floor(Math.random() * sideOffOptions.length)];
+  // Height varies — low to ground level shots, or elevated bird's-eye
+  const heightOptions = [0.7, 1.4, 2.5, 4.5, 8];
+  const height = heightOptions[Math.floor(Math.random() * heightOptions.length)];
+
+  // Find the road point that far ahead
+  const targetIdx = Math.min(nextChunkIdx - 2, carRoadIdx + Math.round(ahead / POINT_STEP));
+  if (targetIdx < 0 || !ROAD_POINTS[targetIdx]) {
+    // Fallback: just position near the car
+    raceCamState.camPos.copy(carState.position).add(new THREE.Vector3(sideOff * side, height, 0));
+    raceCamState.shotCamRoadIdx = carRoadIdx;
+  } else {
+    const roadP = ROAD_POINTS[targetIdx];
+    const { p: perp } = tanPerpAt(targetIdx);
+    raceCamState.camPos.set(
+      roadP.x + perp.x * side * sideOff,
+      height,
+      roadP.z + perp.z * side * sideOff
+    );
+    raceCamState.shotCamRoadIdx = targetIdx;
+  }
+  raceCamState.shotDirection = side;
+  raceCamState.shotAheadDistance = ahead;
+  raceCamState.needsNewShot = false;
+}
+
+function computeRaceCam(phys) {
+  // Cut logic — timing depends on car speed:
+  //  - Always hold at least 3 seconds (prevents dizziness from rapid cuts)
+  //  - Trigger distance scales with speed (30m at low speed, ~55m at top)
+  //  - Max 9 seconds before forced cut (variety)
+  const now = performance.now();
+  const carPassedBy = carRoadIdx - raceCamState.shotCamRoadIdx;
+  const carPassedMeters = carPassedBy * POINT_STEP;
+  const heldSeconds = (now - raceCamState.shotStartTime) / 1000;
+  const speed = phys ? phys.speed : 30;
+  const triggerMeters = 30 + speed * 0.8;
+  const minHold = 3.0;
+  const maxHold = 9.0;
+  const shouldCut =
+    raceCamState.needsNewShot ||
+    (heldSeconds > minHold && carPassedMeters > triggerMeters) ||
+    heldSeconds > maxHold;
+  if (shouldCut) {
+    pickNewRaceShot();
+  }
+  _tmpPos.copy(raceCamState.camPos);
+  _tmpLook.set(carState.position.x, carState.position.y + 0.8, carState.position.z);
+  return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 38, fovSpeedAdd: 0 };
+}
+
+function computeViewCam(mode, phys) {
+  setBodyAxes(carState.heading);
+  const cp = carState.position;
+  switch (mode) {
+    case 'CHASE': {
+      const speedFrac = Math.min(1, phys ? phys.speed / MAX_FORWARD : 0);
+      const behind = 6.5 - speedFrac * 2.7;
+      const above  = 3.2 - speedFrac * 1.7;
+      const lookAhead = 3.5 + speedFrac * 3.5;
+      const lookUp   = 0.6 - speedFrac * 0.3;
+      // Camera position uses MOTION DIRECTION, not heading. During drift the
+      // car body is angled away from motion — placing the camera behind motion
+      // means you SEE the body angle (drift pose). Without this, the camera
+      // tracked heading and the drift was invisible (car always centered).
+      let dirX, dirZ;
+      const vx = carState.velocity.x, vz = carState.velocity.z;
+      const vMag = Math.hypot(vx, vz);
+      if (vMag > 4) {
+        // Use velocity-aligned direction when moving meaningfully
+        dirX = vx / vMag;
+        dirZ = vz / vMag;
+      } else {
+        // At very low speed, fall back to heading (otherwise camera spins
+        // erratically when starting from rest)
+        dirX = _forward.x;
+        dirZ = _forward.z;
+      }
+      _tmpPos.set(cp.x - dirX * behind, cp.y + above, cp.z - dirZ * behind);
+      _tmpLook.set(cp.x + dirX * lookAhead, cp.y + lookUp, cp.z + dirZ * lookAhead);
+      _viewCamResult.fov = 60; _viewCamResult.fovSpeedAdd = 32;
+      return _viewCamResult;
+    }
+    case 'HOOD': {
+      // Mounted just above the front of the car, looking down the road.
+      // No FOV speed change — keeps the view stable.
+      const ahead = 1.4;    // forward from car center, on top of hood
+      const height = 0.85;
+      _tmpPos.set(cp.x + _forward.x * ahead, cp.y + height, cp.z + _forward.z * ahead);
+      _tmpLook.set(cp.x + _forward.x * 40, cp.y + 1.0, cp.z + _forward.z * 40);
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 75, fovSpeedAdd: 0 };
+    }
+    case 'DRIVER': {
+      // Driver's POV — seated in the cabin. Camera at eye height, looking
+      // forward down the road with dashboard + steering wheel visible
+      // in the lower portion of view.
+      const back = -0.05;
+      const height = 0.95;
+      _tmpPos.set(cp.x - _forward.x * back, cp.y + height, cp.z - _forward.z * back);
+      // Look mostly forward, slight downward tilt — keeps road dominant
+      _tmpLook.set(cp.x + _forward.x * 30, cp.y + 1.05, cp.z + _forward.z * 30);
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 72, fovSpeedAdd: 0 };
+    }
+    case 'CINEMATIC': {
+      const behind = 16, above = 2.6, sideOff = 5;
+      _tmpPos.set(
+        cp.x - _forward.x * behind + _right.x * sideOff,
+        cp.y + above,
+        cp.z - _forward.z * behind + _right.z * sideOff
+      );
+      _tmpLook.set(cp.x, cp.y + 0.9, cp.z);
+      return { pos: _tmpPos.clone(), look: _tmpLook.clone(), fov: 50, fovSpeedAdd: 7 };
+    }
+    case 'RACE_CAM': {
+      return computeRaceCam(phys);
+    }
+  }
+}
+
+let lockedDriftSide = 1;
+function computeDriftCam() {
+  setBodyAxes(carState.heading);
+  const cp = carState.position;
+  const sideOff = 3.5 * lockedDriftSide;
+  const back = 4.2;
+  const height = 1.15;
+  _driftPos.set(
+    cp.x + _right.x * sideOff - _forward.x * back,
+    cp.y + height,
+    cp.z + _right.z * sideOff - _forward.z * back
+  );
+  _driftLook.set(cp.x - _forward.x * 0.2, cp.y + 0.5, cp.z - _forward.z * 0.2);
+  _driftCamResult.fov = 46;
+  return _driftCamResult;
+}
+
+const camPos  = new THREE.Vector3(0, 4.5, -9);
+const camLook = new THREE.Vector3();
+let   driftWeight = 0;
+camera.position.copy(camPos);
+
+function updateCamera(dt, phys) {
+  const wantsDrift = phys.isDrifting && carState.driftTime > 0.25;
+  const target = wantsDrift ? 1 : 0;
+
+  if (target === 1 && driftWeight < 0.15) {
+    const s = Math.sign(phys.latVel);
+    if (s !== 0) lockedDriftSide = -s;
+  }
+
+  const k = target > driftWeight
+    ? (1 - Math.exp(-7.5 * dt))
+    : (1 - Math.exp(-2.8 * dt));
+  driftWeight += (target - driftWeight) * k;
+
+  const isRaceCam = VIEW_MODES[viewIndex] === 'RACE_CAM';
+  const v = computeViewCam(VIEW_MODES[viewIndex], phys);
+  const d = computeDriftCam();
+  // Race cam never blends with drift cam — it's a TV view, the drift cam
+  // would just yank it back to the car. Use the race view as-is.
+  const driftBlend = isRaceCam ? 0 : driftWeight;
+  const pos  = v.pos.lerp(d.pos, driftBlend);
+  const look = v.look.lerp(d.look, driftBlend);
+
+  // Hard cut detection for race cam: if the target position is far from
+  // the smoothed camPos, snap (don't lerp). Otherwise the cut looks like
+  // a swoosh across the world.
+  const camJumpDist = pos.distanceTo(camPos);
+  const hardCut = isRaceCam && camJumpDist > 15;
+  if (hardCut) {
+    camPos.copy(pos);
+    camLook.copy(look);
+  } else {
+    // Camera follow rate scales with car speed. At rest the camera is
+    // soft (smooth), at top speed it's nearly rigid so it can keep up
+    // with the car. Without this scaling the camera lags ~25m behind
+    // at top speed, making the car look far away.
+    const followSpeed = phys ? Math.max(3.8, phys.speed * 0.65) : 3.8;
+    const lookSpeed   = phys ? Math.max(5.5, phys.speed * 0.85) : 5.5;
+    const followK = 1 - Math.exp(-followSpeed * dt);
+    const lookK   = 1 - Math.exp(-lookSpeed * dt);
+    camPos.lerp(pos, followK);
+    camLook.lerp(look, lookK);
+  }
+  camera.position.copy(camPos);
+  camera.lookAt(camLook);
+
+  const speedFrac = Math.min(1, phys.speed / MAX_FORWARD);
+  const vFov = v.fov + v.fovSpeedAdd * speedFrac;
+  const targetFov = vFov * (1 - driftBlend) + d.fov * driftBlend;
+  const fovK = hardCut ? 1 : (1 - Math.exp(-6 * dt));
+  camera.fov += (targetFov - camera.fov) * fovK;
+  camera.updateProjectionMatrix();
+
+  const vm = document.getElementById('viewMode');
+  if (driftBlend > 0.35) {
+    vm.classList.add('drift');
+    vm.textContent = 'drift cam';
+  } else {
+    vm.classList.remove('drift');
+    vm.textContent = VIEW_MODES[viewIndex].toLowerCase().replace('_', ' ') + ' cam';
+  }
+}
+
+// ====================================================================
+//  CAR VISUAL + HUD
+// ====================================================================
+const speedHud = document.getElementById('speed');
+const driftHud = document.getElementById('drift');
+const comboHud = document.getElementById('combo');
+const gearHud  = document.getElementById('gear');
+const rpmBar   = document.getElementById('rpmBar');
+const shiftFlash = document.getElementById('shiftFlash');
+audioHintEl    = document.getElementById('audioHint');
+// Don't show the audio hint — the menu replaces it
+// setTimeout(() => audioHintEl && audioHintEl.classList.add('show'), 900);
+
+// === CAR + MAP SELECT MENU ===
+const menuEl = document.getElementById('menu');
+const carRowEl = document.getElementById('carRow');
+const mapRowEl = document.getElementById('mapRow');
+const menuStartBtn = document.getElementById('menuStart');
+let menuSelectedIdx = 0;     // selected car
+let menuSelectedMapIdx = 0;  // selected map
+let gameStarted = false;
+
+function hexToCss(h) {
+  return '#' + h.toString(16).padStart(6, '0');
+}
+
+function buildMenuCards() {
+  carRowEl.innerHTML = '';
+  CARS.forEach((car, idx) => {
+    const card = document.createElement('div');
+    card.className = 'carCard';
+    if (idx === menuSelectedIdx) card.classList.add('selected');
+    card.dataset.idx = idx;
+    const topKph = Math.round(car.maxForward * 3.6);
+    card.innerHTML = `
+      <div class="carSwatch" style="background:${hexToCss(car.color)}"></div>
+      <div class="carName">${car.name}</div>
+      <div class="carInspired">inspired · ${car.inspiration}</div>
+      <div class="carTagline">${car.tagline}</div>
+      <div class="carStats">
+        <div class="carStat"><span>top</span><span class="val">${topKph} km/h</span></div>
+        <div class="carStat"><span>gears</span><span class="val">${car.gearRatios.length}</span></div>
+        <div class="carStat"><span>redline</span><span class="val">${car.rpmRedline}</span></div>
+        <div class="carStat"><span>engine</span><span class="val">${car.cylinders}-cyl</span></div>
+      </div>
+    `;
+    card.addEventListener('click', () => {
+      menuSelectedIdx = idx;
+      updateMenuSelection();
+    });
+    card.addEventListener('dblclick', startGame);
+    carRowEl.appendChild(card);
+  });
+}
+
+function buildMapCards() {
+  mapRowEl.innerHTML = '';
+  MAPS.forEach((map, idx) => {
+    const card = document.createElement('div');
+    card.className = 'mapCard';
+    if (idx === menuSelectedMapIdx) card.classList.add('selected');
+    card.dataset.idx = idx;
+    card.innerHTML = `
+      <div class="mapName">${map.name}</div>
+      <div class="mapDesc">${map.description}</div>
+    `;
+    card.addEventListener('click', () => {
+      menuSelectedMapIdx = idx;
+      updateMenuSelection();
+    });
+    card.addEventListener('dblclick', startGame);
+    mapRowEl.appendChild(card);
+  });
+}
+
+function updateMenuSelection() {
+  const carCards = carRowEl.querySelectorAll('.carCard');
+  carCards.forEach((c, i) => c.classList.toggle('selected', i === menuSelectedIdx));
+  const mapCards = mapRowEl.querySelectorAll('.mapCard');
+  mapCards.forEach((c, i) => c.classList.toggle('selected', i === menuSelectedMapIdx));
+}
+
+function startGame() {
+  if (gameStarted) return;
+  gameStarted = true;
+  initAudio();
+  // Apply car and map selections
+  applyCar(CARS[menuSelectedIdx]);
+  CURRENT_MAP = MAPS[menuSelectedMapIdx];
+  // Apply theme BEFORE building road (so scenery uses correct theme)
+  applyMapTheme(CURRENT_MAP.theme || 'desert');
+  // Build the road for the chosen map
+  initRoad();
+  // Init the minimap for fixed-loop tracks (no-op for procedural)
+  initMinimap();
+  // Init lap timing (fixed-loop only)
+  initLapTiming();
+  // Set car spawn position based on map
+  if (CURRENT_MAP.spawn) {
+    carState.position.set(CURRENT_MAP.spawn.x, 0, CURRENT_MAP.spawn.z);
+    carState.heading = CURRENT_MAP.spawn.heading;
+  } else {
+    carState.position.set(0, 0, 0);
+    carState.heading = 0;
+  }
+  carState.velocity.set(0, 0, 0);
+  carState.driftCommit = 0;
+  carState.driftSign = 0;
+  carRoadIdx = 0;
+  menuEl.classList.add('hidden');
+}
+
+menuStartBtn.addEventListener('click', startGame);
+
+// Menu keyboard nav (only while menu is up)
+addEventListener('keydown', e => {
+  if (gameStarted) return;
+  if (e.code === 'ArrowLeft' || e.code === 'KeyA') {
+    menuSelectedIdx = (menuSelectedIdx - 1 + CARS.length) % CARS.length;
+    updateMenuSelection();
+    e.preventDefault();
+  } else if (e.code === 'ArrowRight' || e.code === 'KeyD') {
+    menuSelectedIdx = (menuSelectedIdx + 1) % CARS.length;
+    updateMenuSelection();
+    e.preventDefault();
+  } else if (e.code === 'ArrowUp' || e.code === 'KeyW') {
+    menuSelectedMapIdx = (menuSelectedMapIdx - 1 + MAPS.length) % MAPS.length;
+    updateMenuSelection();
+    e.preventDefault();
+  } else if (e.code === 'ArrowDown' || e.code === 'KeyS') {
+    menuSelectedMapIdx = (menuSelectedMapIdx + 1) % MAPS.length;
+    updateMenuSelection();
+    e.preventDefault();
+  } else if (e.code === 'Enter' || e.code === 'Space') {
+    startGame();
+    e.preventDefault();
+  }
+});
+
+buildMenuCards();
+buildMapCards();
+// Apply default car so HUD shows correctly even before confirm
+applyCar(CARS[0]);
+
+// Position the upshift tick: where on the rev bar does the auto-shift happen?
+{
+  const upshiftFrac = (RPM_SHIFT_UP - RPM_IDLE) / (RPM_REDLINE - RPM_IDLE);
+  const tick = document.getElementById('upshiftTick');
+  if (tick) tick.style.left = (upshiftFrac * 100).toFixed(1) + '%';
+}
+
+// Track gear changes for HUD flash + shift "thunk" audio cue
+let prevGear = carState.gear;
+let shiftFlashHideAt = 0;
+
+function triggerShiftFlash(direction) {
+  if (!shiftFlash) return;
+  shiftFlash.textContent = direction > 0 ? '▲ UP' : '▼ DOWN';
+  shiftFlash.classList.remove('up', 'down');
+  // reflow trick so the animation re-triggers
+  void shiftFlash.offsetWidth;
+  shiftFlash.classList.add(direction > 0 ? 'up' : 'down');
+  shiftFlashHideAt = performance.now() + 280;
+  gearHud.classList.add('shifting');
+  setTimeout(() => gearHud.classList.remove('shifting'), 200);
+}
+
+function updateCarVisual(dt, fwdVel) {
+  car.position.copy(carState.position);
+  car.rotation.y = carState.heading;
+  const spin = fwdVel / 0.42 * dt;
+  car.userData.wheels.forEach(p => {
+    p.userData.wheel.rotation.x += spin;
+    if (p.userData.isFront) p.rotation.y = carState.steerAngle;
+  });
+  // DRIVER POV: show cockpit interior, hide external car body.
+  // The driftWeight check means: snap back to external view if drift cam
+  // takes over (drift cam doesn't sit inside the car).
+  const inDriver = VIEW_MODES[viewIndex] === 'DRIVER' && driftWeight < 0.4;
+  cockpit.visible = inDriver;
+  // Hide only the EXTERNAL parts when in driver POV, not the whole car
+  // (because the cockpit is a child of `car`).
+  car.traverse(obj => {
+    if (obj.userData && obj.userData.external) {
+      obj.visible = !inDriver;
+    }
+  });
+  // Steering wheel rotation — driven by current steer angle, amplified
+  // for visibility (real wheels rotate ~3x the wheel angle in real cars)
+  if (steeringWheel) {
+    steeringWheel.rotation.z = carState.steerAngle * 3.2;
+  }
+}
+
+// === MINIMAP ===
+// Top-right overlay showing the entire track and the car's current position.
+// Only active on fixed-loop maps (closed circuits). Procedural maps don't
+// have a meaningful "whole map" view since they stream indefinitely.
+const minimapEl = document.getElementById('minimap');
+const minimapCanvas = document.getElementById('minimapCanvas');
+const minimapLabel = document.getElementById('minimapLabel');
+const minimapCtx = minimapCanvas ? minimapCanvas.getContext('2d') : null;
+const minimapState = {
+  active: false,
+  // Track world-space bounds, computed once on map load
+  worldMinX: 0, worldMaxX: 0, worldMinZ: 0, worldMaxZ: 0,
+  scale: 1, offsetX: 0, offsetZ: 0,
+  // Pre-rendered background (the road outline)
+  bgCanvas: null,
+};
+
+function initMinimap() {
+  if (!minimapCtx) return;
+  if (!CURRENT_MAP || CURRENT_MAP.type !== 'fixed_loop') {
+    minimapState.active = false;
+    minimapEl.classList.remove('show');
+    return;
+  }
+  minimapState.active = true;
+  minimapEl.classList.add('show');
+  minimapLabel.textContent = CURRENT_MAP.name.toLowerCase();
+
+  // Compute world-space bounds from ROAD_POINTS
+  let minX = Infinity, maxX = -Infinity, minZ = Infinity, maxZ = -Infinity;
+  for (const p of ROAD_POINTS) {
+    if (!p) continue;
+    if (p.x < minX) minX = p.x;
+    if (p.x > maxX) maxX = p.x;
+    if (p.z < minZ) minZ = p.z;
+    if (p.z > maxZ) maxZ = p.z;
+  }
+  // Pad bounds slightly so the track doesn't touch the minimap edges
+  const padW = (maxX - minX) * 0.08;
+  const padH = (maxZ - minZ) * 0.08;
+  minX -= padW; maxX += padW; minZ -= padH; maxZ += padH;
+  minimapState.worldMinX = minX;
+  minimapState.worldMaxX = maxX;
+  minimapState.worldMinZ = minZ;
+  minimapState.worldMaxZ = maxZ;
+
+  // Compute scale so the track fits within the canvas (square aspect)
+  const W = minimapCanvas.width;
+  const H = minimapCanvas.height;
+  const worldW = maxX - minX;
+  const worldH = maxZ - minZ;
+  const scale = Math.min(W / worldW, H / worldH);
+  minimapState.scale = scale;
+  // Center the track in the canvas
+  minimapState.offsetX = (W - worldW * scale) / 2 - minX * scale;
+  minimapState.offsetZ = (H - worldH * scale) / 2 - minZ * scale;
+
+  // Pre-render the track outline to a backing canvas
+  const bg = document.createElement('canvas');
+  bg.width = W; bg.height = H;
+  const bgCtx = bg.getContext('2d');
+  bgCtx.lineWidth = 5;
+  bgCtx.strokeStyle = 'rgba(255, 220, 190, 0.55)';
+  bgCtx.lineCap = 'round';
+  bgCtx.beginPath();
+  let started = false;
+  for (let i = 0; i < ROAD_POINTS.length; i++) {
+    const p = ROAD_POINTS[i];
+    if (!p) continue;
+    const px = p.x * scale + minimapState.offsetX;
+    const py = p.z * scale + minimapState.offsetZ;
+    if (!started) { bgCtx.moveTo(px, py); started = true; }
+    else bgCtx.lineTo(px, py);
+  }
+  // Close the loop visually
+  if (ROAD_POINTS[0]) {
+    const p0 = ROAD_POINTS[0];
+    bgCtx.lineTo(p0.x * scale + minimapState.offsetX, p0.z * scale + minimapState.offsetZ);
+  }
+  bgCtx.stroke();
+  // Mark the start/finish line as a brighter accent
+  if (ROAD_POINTS[0]) {
+    const p0 = ROAD_POINTS[0];
+    bgCtx.fillStyle = 'rgba(255, 176, 112, 1.0)';
+    bgCtx.beginPath();
+    bgCtx.arc(p0.x * scale + minimapState.offsetX, p0.z * scale + minimapState.offsetZ, 7, 0, Math.PI * 2);
+    bgCtx.fill();
+  }
+  minimapState.bgCanvas = bg;
+}
+
+function updateMinimap() {
+  if (!minimapState.active || !minimapCtx) return;
+  const W = minimapCanvas.width;
+  const H = minimapCanvas.height;
+  // Clear and redraw background
+  minimapCtx.clearRect(0, 0, W, H);
+  if (minimapState.bgCanvas) minimapCtx.drawImage(minimapState.bgCanvas, 0, 0);
+  // Draw the car as a triangle pointing in its heading direction
+  const cx = carState.position.x * minimapState.scale + minimapState.offsetX;
+  const cy = carState.position.z * minimapState.scale + minimapState.offsetZ;
+  minimapCtx.save();
+  minimapCtx.translate(cx, cy);
+  // World heading convention: forward = (sin h, cos h). So heading=0 means
+  // forward is +Z, heading=+π/2 means forward is +X (world right).
+  // Canvas Y is flipped (down is +Y), so ctx.rotate(positive) is CW visually.
+  // To make the triangle point world +X (canvas right) when heading=+π/2,
+  // we need to rotate CCW in canvas — which means rotating by -heading.
+  minimapCtx.rotate(-carState.heading);
+  minimapCtx.shadowColor = 'rgba(255, 176, 112, 0.95)';
+  minimapCtx.shadowBlur = 14;
+  minimapCtx.fillStyle = 'rgba(255, 220, 180, 1)';
+  minimapCtx.beginPath();
+  minimapCtx.moveTo(0, 11);    // tip — forward direction (canvas +Y)
+  minimapCtx.lineTo(7, -9);
+  minimapCtx.lineTo(-7, -9);
+  minimapCtx.closePath();
+  minimapCtx.fill();
+  minimapCtx.restore();
+}
+
+// === LAP TIMING ===
+// For fixed-loop maps: detect start/finish crossings by watching carRoadIdx
+// transition from "near the end of the loop" to "near the start". Track
+// current lap time, last lap time, best lap time. Best lap is persisted
+// per map+car combo in localStorage so it survives reloads.
+lapState = {
+  active: false,
+  running: false,        // started timing after first crossing
+  lapStartTime: 0,       // performance.now() at lap start
+  currentLap: 0,         // seconds since lap start
+  lastLap: null,         // seconds, last completed lap
+  bestLap: null,         // seconds, best ever
+  prevIdx: 0,            // for crossing detection
+  storageKey: '',
+};
+
+const lapTimeEl = document.getElementById('lapTime');
+const lapBestEl = document.getElementById('lapBest');
+const lapLastEl = document.getElementById('lapLast');
+const lapPanelEl = document.getElementById('lapPanel');
+
+function formatLapTime(seconds) {
+  if (seconds == null) return '--:--.---';
+  const m = Math.floor(seconds / 60);
+  const s = seconds - m * 60;
+  return `${m}:${s.toFixed(3).padStart(6, '0')}`;
+}
+
+function initLapTiming() {
+  if (!CURRENT_MAP || CURRENT_MAP.type !== 'fixed_loop') {
+    lapState.active = false;
+    if (lapPanelEl) lapPanelEl.classList.remove('show');
+    return;
+  }
+  lapState.active = true;
+  lapState.running = false;
+  lapState.currentLap = 0;
+  lapState.lastLap = null;
+  lapState.prevIdx = 0;
+  // Per-map+car best lap key
+  const carId = CURRENT_CAR.id || 'unknown';
+  lapState.storageKey = `gh_best_${CURRENT_MAP.id}_${carId}`;
+  try {
+    const stored = localStorage.getItem(lapState.storageKey);
+    lapState.bestLap = stored ? parseFloat(stored) : null;
+    if (isNaN(lapState.bestLap)) lapState.bestLap = null;
+  } catch (e) {
+    lapState.bestLap = null;
+  }
+  if (lapPanelEl) lapPanelEl.classList.add('show');
+  refreshLapHUD();
+}
+
+function refreshLapHUD() {
+  if (!lapTimeEl) return;
+  lapTimeEl.textContent = lapState.running
+    ? formatLapTime(lapState.currentLap)
+    : 'press W to start';
+  if (lapBestEl) lapBestEl.textContent = formatLapTime(lapState.bestLap);
+  if (lapLastEl) lapLastEl.textContent = formatLapTime(lapState.lastLap);
+}
+
+function updateLapTiming(dt) {
+  if (!lapState.active) return;
+  const N = nextChunkIdx;
+  if (N < 20) return;
+  const idx = carRoadIdx;
+  const prev = lapState.prevIdx;
+  // Detect crossing of the start/finish line. WIDER window than before
+  // (50 vs 20) — at race speeds the carRoadIdx can advance many steps per
+  // frame, so a narrow window risked missing crossings.
+  const widerWindow = 50;
+  const crossedFinish = prev > N - widerWindow && idx < widerWindow && idx !== prev;
+  // Start timing on first forward motion near the start
+  const startedMoving = !lapState.running && idx >= 1 && idx < widerWindow && carState.velocity.length() > 1;
+
+  if (crossedFinish && lapState.running && lapState.currentLap > 25) {
+    // Complete lap (minimum 25s to ignore false-positive crossings
+    // from carRoadIdx jitter when player loiters near start/finish)
+    const lap = lapState.currentLap;
+    lapState.lastLap = lap;
+    if (lapState.bestLap == null || lap < lapState.bestLap) {
+      lapState.bestLap = lap;
+      try { localStorage.setItem(lapState.storageKey, String(lap)); } catch (e) {}
+      if (lapPanelEl) {
+        lapPanelEl.classList.add('newBest');
+        setTimeout(() => lapPanelEl.classList.remove('newBest'), 2500);
+      }
+    }
+    lapState.lapStartTime = performance.now();
+    lapState.currentLap = 0;
+  } else if (startedMoving) {
+    lapState.running = true;
+    lapState.lapStartTime = performance.now();
+    lapState.currentLap = 0;
+  } else if (lapState.running) {
+    lapState.currentLap = (performance.now() - lapState.lapStartTime) / 1000;
+  }
+
+  lapState.prevIdx = idx;
+  refreshLapHUD();
+}
+
+function updateHUD(speed, isDrifting) {
+  speedHud.textContent = Math.round(speed * 3.6);
+  if (isDrifting && carState.driftTime > 0.25) {
+    driftHud.classList.add('active');
+    comboHud.textContent = carState.driftTime.toFixed(1) + 's';
+  } else {
+    driftHud.classList.remove('active');
+  }
+
+  // Gear change detection — fires the visual flash + audio thunk
+  if (carState.gear !== prevGear) {
+    const dir = carState.gear > prevGear ? 1 : -1;
+    triggerShiftFlash(dir);
+    playShiftThunk(dir);
+    prevGear = carState.gear;
+  }
+  // Hide shift flash after its timer
+  if (shiftFlashHideAt && performance.now() > shiftFlashHideAt) {
+    shiftFlash.classList.remove('up', 'down');
+    shiftFlashHideAt = 0;
+  }
+
+  gearHud.textContent = 'G' + carState.gear;
+  const frac = Math.min(1, Math.max(0, (carState.rpm - RPM_IDLE) / (RPM_REDLINE - RPM_IDLE)));
+  rpmBar.style.width = (frac * 100).toFixed(1) + '%';
+  if (carState.shiftTimer > 0) {
+    // Dim/desaturate the bar during a shift — visual cue of clutch disengage
+    rpmBar.style.background = 'linear-gradient(90deg, #b08560, #806050)';
+  } else if (frac > 0.88) {
+    rpmBar.style.background = 'linear-gradient(90deg, #ffb070, #ff5050)';
+  } else {
+    rpmBar.style.background = 'linear-gradient(90deg, #ffd5a0, #ffb070)';
+  }
+}
+
+// ====================================================================
+//  MAIN LOOP
+// ====================================================================
+let lastTime = performance.now();
+function animate(now) {
+  requestAnimationFrame(animate);
+  const dt = Math.min(0.05, (now - lastTime) / 1000);
+  lastTime = now;
+
+  // Before the game starts (menu is up), don't run physics or road logic.
+  // Just render the scene so the canvas isn't blank behind the menu.
+  if (!gameStarted) {
+    composer.render();
+    return;
+  }
+
+  const phys = updatePhysics(dt);
+  updateCarVisual(dt, phys.fwdVel);
+
+  // Smoke during real drifts or handbrake-at-speed
+  const handbrakeAtSpeed = keys.Space && phys.speed > 6;
+  if (phys.isDrifting || handbrakeAtSpeed) {
+    const latI = Math.min(1, Math.abs(phys.latVel) / 9);
+    const intensity = Math.max(latI, handbrakeAtSpeed ? 0.45 : 0);
+    if (Math.random() < intensity * 32 * dt) {
+      setBodyAxes(carState.heading);
+      for (const xOff of [-0.95, 0.95]) {
+        _smokePos.set(
+          carState.position.x + _right.x * xOff - _forward.x * 1.35,
+          0.25,
+          carState.position.z + _right.z * xOff - _forward.z * 1.35
+        );
+        spawnSmoke(_smokePos, intensity);
+      }
+    }
+  }
+
+  updateSmoke(dt);
+  updateCamera(dt, phys);
+  updateHUD(phys.speed, phys.isDrifting);
+  updateMinimap();
+  updateLapTiming(dt);
+  updateAudio(dt, phys);
+  streamRoad();
+
+  // Respawn-when-lost: if the car is far from the road for a sustained
+  // period, gently teleport it back. Brief excursions (wide drifts off
+  // the shoulder) are tolerated thanks to the hold timer.
+  // Disabled on fixed-loop maps — barriers handle keeping the car on track.
+  if (CURRENT_MAP && CURRENT_MAP.type !== 'fixed_loop') {
+    const roadP = ROAD_POINTS[carRoadIdx];
+    if (roadP) {
+      const dx = carState.position.x - roadP.x;
+      const dz = carState.position.z - roadP.z;
+      const distFromRoad = Math.hypot(dx, dz);
+      if (distFromRoad > RESPAWN_DISTANCE) {
+        lostTimer += dt;
+        if (lostTimer >= RESPAWN_HOLD_TIME) attemptRespawn();
+      } else {
+        lostTimer = 0;
+      }
+    }
+  }
+
+  // Keep distant mountains "out there" — re-center around the car (XZ only)
+  mtnNear.position.set(carState.position.x, 0, carState.position.z);
+  mtnFar.position.set(carState.position.x, 0, carState.position.z);
+  // Keep sky and ground centered too
+  skyMesh.position.set(carState.position.x, 0, carState.position.z);
+  ground.position.set(carState.position.x, 0, carState.position.z);
+  // Sun stays "infinitely far away" — also re-center XZ
+  const sunOffset = new THREE.Vector3(-80, 30, -900);
+  sun.position.set(carState.position.x + sunOffset.x, sunOffset.y, carState.position.z + sunOffset.z);
+  sunGlow.position.copy(sun.position).add(new THREE.Vector3(0, 0, 1));
+
+  // Motion blur — very subtle. Just a hint at the screen edges, no smearing.
+  // Speed feel comes from the wide FOV and low chase cam, not from blurring.
+  const speedFrac = Math.min(1, phys.speed / MAX_FORWARD);
+  // Motion blur — peak 1.7 (moderate). Low camera + FOV do the heavy lifting
+  // for speed sensation; blur is the accent layer at the top end.
+  const driftBlurBoost = phys.isDrifting ? 0.3 : 0;
+  const blurTarget = Math.min(1.7, Math.pow(speedFrac, 1.8) * 1.5 + driftBlurBoost);
+  const cur = radialBlurPass.uniforms.blurStrength.value;
+  radialBlurPass.uniforms.blurStrength.value = cur + (blurTarget - cur) * (1 - Math.exp(-3.5 * dt));
+
+  composer.render();
+}
+
+addEventListener('resize', () => {
+  camera.aspect = innerWidth / innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(innerWidth, innerHeight);
+  composer.setSize(innerWidth, innerHeight);
+});
+
+requestAnimationFrame(t => { lastTime = t; animate(t); });
+setTimeout(() => document.getElementById('loading').classList.add('hidden'), 500);
+</script>
+</body>
+</html>
