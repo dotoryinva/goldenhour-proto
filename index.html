@@ -299,6 +299,37 @@
     transition: opacity 0.5s ease;
   }
   #menu.hidden { opacity: 0; pointer-events: none; }
+
+  /* On touch devices the menu is often taller than the landscape viewport,
+     so switch to a scrollable, top-anchored layout. The bottom fade signals
+     to the user that there's more content below (the start button). */
+  body.is-touch #menu {
+    justify-content: flex-start;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: 24px 16px 80px;
+    -webkit-overflow-scrolling: touch;
+  }
+  /* Bottom fade — drawn as a fixed overlay above the menu but below buttons.
+     Sits at the bottom edge to hint "scroll for more". Pointer-events off so
+     it never blocks taps on the start button or anything else. */
+  body.is-touch #menu::after {
+    content: '';
+    position: fixed;
+    left: 0; right: 0; bottom: 0;
+    height: 60px;
+    background: linear-gradient(to bottom, rgba(26, 13, 18, 0) 0%, rgba(26, 13, 18, 0.85) 100%);
+    pointer-events: none;
+    z-index: 1;
+  }
+  /* Hide the fade once the user has scrolled to the bottom (start button visible) */
+  body.is-touch #menu.scrolled-bottom::after { opacity: 0; transition: opacity 0.3s ease; }
+  /* Smaller title on mobile so more content fits without immediate scrolling */
+  body.is-touch #menuTitle { font-size: 42px; margin-bottom: 2px; }
+  body.is-touch #menuSub { margin-bottom: 16px; }
+  /* Ensure the start button has breathing room above the bottom fade */
+  body.is-touch #menuStart { margin-bottom: 12px; }
+  body.is-touch #menuHint { padding-bottom: 12px; }
   #menuTitle {
     font-family: 'Instrument Serif', serif;
     font-style: italic;
@@ -3466,6 +3497,16 @@ addEventListener('keyup', e => { keys[e.code] = false; });
   }
   bindTap('btnCam',   () => cycleView());
   bindTap('btnReset', () => resetCar());
+
+  // Menu scroll: hide the bottom fade once the user has scrolled to the
+  // bottom so the start button isn't visually competing with the gradient.
+  const menuEl = document.getElementById('menu');
+  if (menuEl) {
+    menuEl.addEventListener('scroll', () => {
+      const atBottom = menuEl.scrollTop + menuEl.clientHeight >= menuEl.scrollHeight - 20;
+      menuEl.classList.toggle('scrolled-bottom', atBottom);
+    }, { passive: true });
+  }
 
   // Block iOS double-tap-zoom while the touch UI is visible (otherwise
   // rapid taps on accel/brake can trigger page zoom and break driving).
