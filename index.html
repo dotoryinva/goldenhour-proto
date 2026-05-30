@@ -2,6 +2,7 @@
 <html lang="en">
 <head>
 <meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>Golden Hour — Drift Prototype v0.4</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -488,29 +489,39 @@
   #touchControls {
     display: none;
     position: fixed;
-    left: 0; right: 0; bottom: 0;
+    left: 0; right: 0; top: 0; bottom: 0;
     pointer-events: none; /* container is transparent; only buttons capture */
     z-index: 20;
-    /* Keep buttons clear of iOS home indicator etc. */
     padding-bottom: env(safe-area-inset-bottom, 0px);
+    padding-top: env(safe-area-inset-top, 0px);
   }
   body.is-touch #touchControls { display: block; }
   body.is-touch #controls { display: none; }
-  /* Slightly smaller HUD on phones so it doesn't crowd the buttons. */
-  body.is-touch #hud { transform: scale(0.85); transform-origin: bottom left; }
-  body.is-touch #lapPanel { transform: scale(0.85); transform-origin: top right; }
+  /* Shift HUD elements inward so they don't slide under the thumb zones. */
+  body.is-touch #hud {
+    left: 50%; transform: translateX(-50%) scale(0.85);
+    transform-origin: bottom center;
+    bottom: 8px;
+  }
+  body.is-touch #lapPanel {
+    transform: scale(0.85); transform-origin: top right;
+    right: 8px; top: 8px;
+  }
+  body.is-touch #title {
+    transform: scale(0.8); transform-origin: top left;
+    top: 8px; left: 8px;
+  }
 
   .touchBtn {
     position: absolute;
     pointer-events: auto;
-    width: 84px; height: 84px;
     border-radius: 50%;
-    background: rgba(20, 20, 20, 0.35);
-    border: 1.5px solid rgba(255, 255, 255, 0.35);
-    color: rgba(255, 255, 255, 0.85);
+    background: rgba(20, 20, 20, 0.22);
+    border: 1.5px solid rgba(255, 255, 255, 0.28);
+    color: rgba(255, 255, 255, 0.78);
     font-family: 'Courier New', monospace;
-    font-size: 13px;
-    letter-spacing: 0.5px;
+    font-size: 14px;
+    letter-spacing: 1px;
     display: flex;
     align-items: center;
     justify-content: center;
@@ -518,34 +529,94 @@
     -webkit-user-select: none;
     -webkit-tap-highlight-color: transparent;
     touch-action: none;
-    backdrop-filter: blur(4px);
-    -webkit-backdrop-filter: blur(4px);
+    backdrop-filter: blur(3px);
+    -webkit-backdrop-filter: blur(3px);
     transition: background 0.08s ease, transform 0.08s ease;
   }
   .touchBtn:active, .touchBtn.pressed {
-    background: rgba(220, 180, 100, 0.55); /* warm golden when held */
+    background: rgba(220, 180, 100, 0.5); /* warm golden when held */
     transform: scale(0.94);
+    border-color: rgba(255, 215, 160, 0.6);
   }
-  .touchBtn svg { width: 32px; height: 32px; fill: currentColor; }
+  .touchBtn svg { width: 44px; height: 44px; fill: currentColor; opacity: 0.85; }
 
-  /* Left thumb zone: turn arrows side-by-side */
-  #btnLeft  { left: 24px;  bottom: 32px; }
-  #btnRight { left: 124px; bottom: 32px; }
-  /* Right thumb zone: accelerate (top) + brake (bottom), stacked */
-  #btnAccel { right: 24px; bottom: 122px; }
-  #btnBrake { right: 24px; bottom: 32px; }
-  /* Camera switch — small, top-right area, out of the way */
+  /* Primary driving buttons — large, easy to thumb */
+  #btnLeft, #btnRight, #btnAccel, #btnBrake {
+    width: 110px; height: 110px;
+  }
+  /* Left thumb zone */
+  #btnLeft  { left: 24px;  bottom: 28px; }
+  #btnRight { left: 150px; bottom: 28px; }
+  /* Right thumb zone — accel on top, brake below */
+  #btnAccel { right: 24px; bottom: 150px; }
+  #btnBrake { right: 24px; bottom: 28px; }
+  /* CAM — bottom-center, between the thumb zones */
   #btnCam {
-    right: 16px; top: 24px;
-    width: 48px; height: 48px;
-    font-size: 10px;
+    left: 50%; transform: translateX(-50%);
+    bottom: 8px;
+    width: 56px; height: 56px;
+    font-size: 11px;
   }
-  /* Reset — small, top-left under the title */
+  #btnCam:active, #btnCam.pressed {
+    transform: translateX(-50%) scale(0.94);
+  }
+  /* RESET — small, top area, away from action */
   #btnReset {
-    left: 16px; top: 120px;
-    width: 48px; height: 48px;
+    right: 80px; top: 12px;
+    width: 50px; height: 50px;
     font-size: 10px;
   }
+
+  /* === PORTRAIT LOCK OVERLAY === */
+  /* Driving game; portrait is wrong. Take over the screen and ask user to rotate. */
+  #rotatePrompt {
+    display: none;
+    position: fixed;
+    inset: 0;
+    background: #1a0d12;
+    z-index: 9999;
+    color: var(--warm);
+    font-family: 'IBM Plex Mono', monospace;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    text-align: center;
+    padding: 32px;
+    gap: 20px;
+  }
+  #rotatePrompt .icon {
+    width: 80px; height: 80px;
+    border: 2px solid var(--warm-dim);
+    border-radius: 12px;
+    position: relative;
+    animation: rotateHint 2.4s ease-in-out infinite;
+  }
+  #rotatePrompt .icon::after {
+    content: '';
+    position: absolute;
+    top: 50%; left: 10%; right: 10%;
+    height: 3px;
+    background: var(--warm-dim);
+    border-radius: 2px;
+  }
+  @keyframes rotateHint {
+    0%, 20% { transform: rotate(0deg); }
+    50%, 70% { transform: rotate(-90deg); }
+    100% { transform: rotate(-90deg); }
+  }
+  #rotatePrompt .title {
+    font-family: 'Instrument Serif', serif;
+    font-style: italic;
+    font-size: 28px;
+    color: var(--warm);
+  }
+  #rotatePrompt .sub {
+    font-size: 13px;
+    color: var(--warm-dim);
+    letter-spacing: 1.2px;
+    text-transform: uppercase;
+  }
+  body.portrait-lock #rotatePrompt { display: flex; }
 </style>
 </head>
 <body>
@@ -620,6 +691,12 @@
   <button class="touchBtn" id="btnBrake" aria-label="brake">BRAKE</button>
   <button class="touchBtn" id="btnCam"   aria-label="change camera">CAM</button>
   <button class="touchBtn" id="btnReset" aria-label="reset car">RESET</button>
+</div>
+
+<div id="rotatePrompt" aria-hidden="true">
+  <div class="icon"></div>
+  <div class="title">Rotate your phone</div>
+  <div class="sub">Golden Hour is best in landscape</div>
 </div>
 
 <div id="vignette"></div>
@@ -3319,15 +3396,43 @@ addEventListener('keyup', e => { keys[e.code] = false; });
 (function setupTouchControls() {
   const mql = window.matchMedia('(pointer: coarse)');
   function isTouchDevice() {
-    return mql.matches && window.innerWidth <= 900;
+    // Use the smaller dimension so a landscape phone (e.g. 844x390) still
+    // qualifies — orientation flips innerWidth/innerHeight.
+    const minDim = Math.min(window.innerWidth, window.innerHeight);
+    return mql.matches && minDim <= 900;
+  }
+  function isPortrait() {
+    return window.innerHeight > window.innerWidth;
   }
   function applyTouchClass() {
-    document.body.classList.toggle('is-touch', isTouchDevice());
+    const touch = isTouchDevice();
+    document.body.classList.toggle('is-touch', touch);
+    // Portrait lock only applies on touch devices.
+    document.body.classList.toggle('portrait-lock', touch && isPortrait());
+    // When entering portrait, clear any held-down input so the car doesn't
+    // keep accelerating because a touchend was swallowed by the rotation.
+    if (touch && isPortrait()) {
+      keys.KeyW = false; keys.KeyS = false;
+      keys.KeyA = false; keys.KeyD = false;
+    }
+    // Mobile browsers can be slow to fire resize after the address bar
+    // collapses or after orientation change. Nudge the renderer.
+    window.dispatchEvent(new Event('resize'));
   }
   applyTouchClass();
-  // Re-evaluate on viewport changes (rotation, window resize on dev tools).
   mql.addEventListener?.('change', applyTouchClass);
-  window.addEventListener('resize', applyTouchClass);
+  window.addEventListener('resize', () => {
+    // Re-check classes on every resize (covers orientation change, address
+    // bar collapse, browser window resize on desktop).
+    const touch = isTouchDevice();
+    document.body.classList.toggle('is-touch', touch);
+    document.body.classList.toggle('portrait-lock', touch && isPortrait());
+  });
+  // Some browsers fire `orientationchange` but delay resize; fire a follow-up
+  // resize after a tick so the renderer sees the new dimensions.
+  window.addEventListener('orientationchange', () => {
+    setTimeout(() => window.dispatchEvent(new Event('resize')), 200);
+  });
 
   // Wire each button to the same keys[] flag the keyboard handler uses, so
   // physics doesn't care whether input came from keys or touch.
@@ -3366,7 +3471,6 @@ addEventListener('keyup', e => { keys[e.code] = false; });
   // rapid taps on accel/brake can trigger page zoom and break driving).
   document.addEventListener('touchstart', (e) => {
     if (!document.body.classList.contains('is-touch')) return;
-    // Only block multi-touch gestures and rapid retaps on game buttons.
     if (e.touches && e.touches.length > 1) e.preventDefault();
   }, { passive: false });
 })();
