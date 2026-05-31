@@ -542,6 +542,16 @@
     transform: scale(0.8); transform-origin: top left;
     top: 8px; left: 8px;
   }
+  /* Move minimap to top-left (below the title) so it doesn't fight the lap
+     panel and the GO button at the top-right. */
+  body.is-touch #minimap {
+    top: 70px; left: 8px;
+    right: auto;
+    width: 100px; height: 100px;
+  }
+  body.is-touch #minimapLabel {
+    font-size: 9px;
+  }
 
   .touchBtn {
     position: absolute;
@@ -573,27 +583,26 @@
 
   /* Primary driving buttons — large, easy to thumb */
   #btnLeft, #btnRight, #btnAccel, #btnBrake {
-    width: 110px; height: 110px;
+    width: 96px; height: 96px;
   }
   /* Left thumb zone */
   #btnLeft  { left: 24px;  bottom: 28px; }
-  #btnRight { left: 150px; bottom: 28px; }
+  #btnRight { left: 138px; bottom: 28px; }
   /* Right thumb zone — accel on top, brake below */
-  #btnAccel { right: 24px; bottom: 150px; }
+  #btnAccel { right: 24px; bottom: 138px; }
   #btnBrake { right: 24px; bottom: 28px; }
-  /* CAM — bottom-center, between the thumb zones */
+  /* CAM and RESET — top-center, side-by-side, out of the way of HUD/buttons */
   #btnCam {
-    left: 50%; transform: translateX(-50%);
-    bottom: 8px;
-    width: 56px; height: 56px;
-    font-size: 11px;
+    left: 50%; top: 12px;
+    transform: translateX(-50%);
+    width: 50px; height: 50px;
+    font-size: 10px;
   }
   #btnCam:active, #btnCam.pressed {
     transform: translateX(-50%) scale(0.94);
   }
-  /* RESET — small, top area, away from action */
   #btnReset {
-    right: 80px; top: 12px;
+    left: calc(50% - 64px); top: 12px;
     width: 50px; height: 50px;
     font-size: 10px;
   }
